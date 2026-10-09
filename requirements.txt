@@ -1,0 +1,6 @@
+qiskit>=1.3
+qiskit-aer
+qiskit-ionq>=1.0
+numpy
+matplotlib
+pytest
