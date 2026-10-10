@@ -277,7 +277,8 @@
     for (const id of ["cxFlip", "strayZ", "sdg", "hh", "zOnly", "exact"]) $(id).checked = !!state[id];
     for (const id of ["drift", "pad", "shots", "p2"]) $(id).value = state[id];
     $("circuit").value = state.circuit;
-    $("presetEdits").hidden = !!state.custom;
+    // with a custom circuit the preset picker and its edit toggles do not apply
+    document.querySelector("#controlsRow > .card").hidden = !!state.custom;
     $("sdgRow").hidden = state.circuit !== "bell_rot";
     $("driftOut").textContent = state.drift.toFixed(2) + " rad";
     $("padOut").textContent = String(state.pad);
@@ -297,6 +298,9 @@
       e.hidden = !e.dataset.modes.split(" ").includes(mode);
     });
     renderHooks.forEach((fn) => fn(c));
+    // hooks may switch gate-click handling on or off (the builder does)
+    drawCircuit($("circEdited"), n, c.mod, added, "add", mode === "sandbox" ? api.onEditedGate : null);
+    $("circHint").hidden = !(mode === "sandbox" && api.onEditedGate);
   }
 
   function setMode(id) {

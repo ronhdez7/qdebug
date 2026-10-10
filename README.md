@@ -11,9 +11,13 @@ IonQ cloud simulator) and judging the two kinds of deviation separately.
 | `LOGIC_BUG` | The **ideal (noise-free)** output distribution changed. Reports *which edit* did it |
 | `NOISE_REGRESSION` | Logic unchanged, but the change made the circuit noticeably noisier (e.g. +80 CX) |
 
-**Try the idea in a browser, nothing to install:** open [`docs/index.html`](docs/index.html). It is an
-interactive walk through seven situations (harmless refactor, phase bug, a bug smaller than shot
-noise, a change that is only noisier, ...) showing the ideal view and the noisy view side by side.
+**Learn the idea in a browser, nothing to install:** open [`docs/index.html`](docs/index.html).
+
+* **Lesson:** eight steps, one idea each: shot noise, hardware noise, why a tolerance hides small
+  bugs, the ideal view, phase bugs in the Z basis, why even Z, X and Y are not the whole state, the
+  noisy view, and safe refactors. Every step has something to try on the live controls.
+* **Challenge:** an edited circuit and the two views, verdict hidden. You make the call.
+* **Sandbox:** preset situations plus a circuit builder (up to 4 qubits) to break things yourself.
 
 ---
 
@@ -247,7 +251,9 @@ be = QiskitBackendAdapter(platform_backend)      # noisy counts from it, exact i
   `IONQ_API_KEY=... python -m pytest -m ionq -v` then checks the assumptions the fake provider encodes.
 * **The pull-request workflow has not run on GitHub yet** (nothing has been pushed).
 * **The browser demo is a teaching aid, not the tool.** It re-implements the method in JavaScript for
-  three small circuits with depolarizing noise. `tests/test_web_demo.py` checks it against Qiskit
+  circuits of up to four qubits (seven gate types) with depolarizing noise. The page itself was
+  exercised in headless Chromium (every lesson step, 40 challenge rounds, the builder) but has no
+  automated UI test in the repo. `tests/test_web_demo.py` checks it against Qiskit
   (ideal, to 1e-12), Qiskit Aer (noisy, to 1e-9) and the Python verdicts; that test needs Node.js.
 * **Exact equivalence is a small-circuit feature**: statevectors up to 20 qubits, unitaries up to 10.
   Above that, "behaviour identical" rests on the probe bases (a warning says so); 4 random mixed bases
