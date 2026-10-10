@@ -30,3 +30,8 @@ include = ["qdebug*"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 filterwarnings = ["ignore"]
+addopts = "-m 'not slow and not ionq'"
+markers = [
+    "slow: long statistical runs (select with -m slow)",
+    "ionq: needs a real IONQ_API_KEY and network (select with -m ionq)",
+]

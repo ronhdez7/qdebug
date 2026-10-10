@@ -21,6 +21,21 @@ def bell(rz: float = 0.0) -> QuantumCircuit:
     return qc
 
 
+def bell_rot(*, sdg: bool = False) -> QuantumCircuit:
+    """Bell pair with q1 rotated so its correlations sit in *mixed* bases.
+
+    The output is uniform in the all-Z, all-X and all-Y bases whether the last
+    gate is S or S-dagger, yet the two states are orthogonal: they differ only
+    in correlations such as <Z(q0) Y(q1)>.
+    """
+    qc = QuantumCircuit(2, name="bell_rot")
+    qc.h(0)
+    qc.cx(0, 1)
+    qc.h(1)
+    qc.sdg(1) if sdg else qc.s(1)
+    return qc
+
+
 def ghz4(*, flip_first_cx=False, pad_pairs=0, hh=False, final_z=False) -> QuantumCircuit:
     qc = QuantumCircuit(4, name="ghz4")
     qc.h(0)
@@ -38,8 +53,13 @@ def ghz4(*, flip_first_cx=False, pad_pairs=0, hh=False, final_z=False) -> Quantu
     return qc
 
 
-def qft3(angle_err: float = 0.0) -> QuantumCircuit:
-    """QFT on 3 qubits applied to the basis state |101>."""
+def qft3(angle_err: float = 0.0, dead_angle_err: float = 0.0) -> QuantumCircuit:
+    """QFT on 3 qubits applied to the basis state |101>.
+
+    ``angle_err`` perturbs a controlled phase whose control is |1> (observable);
+    ``dead_angle_err`` perturbs one whose control is |0> (changes the unitary but
+    not the output for this input).
+    """
     n = 3
     qc = QuantumCircuit(n, name="qft3")
     qc.x(0)
@@ -47,9 +67,9 @@ def qft3(angle_err: float = 0.0) -> QuantumCircuit:
     for j in range(n):
         qc.h(j)
         for k in range(j + 1, n):
-            # (0, 2): control is q2 = |1>, so the angle really matters. (A bad angle
-            # on a gate whose control is |0> is unobservable, and rightly passes.)
-            err = angle_err if (j, k) == (0, 2) else 0.0
+            # (0, 2): control is q2 = |1>, so the angle really matters.
+            # (0, 1): control is q1 = |0>, so a bad angle is unobservable here.
+            err = {(0, 2): angle_err, (0, 1): dead_angle_err}.get((j, k), 0.0)
             qc.cp(pi / 2 ** (k - j) + err, k, j)
     qc.swap(0, 2)
     return qc
@@ -94,7 +114,7 @@ def bv(secret=(1, 1, 0, 1), *, drop=None, reverse=False) -> QuantumCircuit:
 # ------------------------------------------------------------------- suites
 
 def golden_circuits() -> dict[str, QuantumCircuit]:
-    return {"bell": bell(), "ghz4": ghz4(), "qft3": qft3(),
+    return {"bell": bell(), "bell_rot": bell_rot(), "ghz4": ghz4(), "qft3": qft3(),
             "grover3": grover3(), "bv": bv()}
 
 
@@ -116,6 +136,9 @@ def mutants(pad_pairs: int = 40) -> list[Mutant]:
                "H-H pair inserted: structural change, same behaviour"),
         Mutant("bv_oracle_reordered", "bv", bv(reverse=True), "REFACTOR_OK",
                "commuting CX gates reordered"),
+        Mutant("qft3_dead_angle", "qft3", qft3(dead_angle_err=0.3), "REFACTOR_OK",
+               "angle error behind a |0> control: same output state, different "
+               "unitary. Passes with a warning; LOGIC_BUG under --equivalence unitary"),
         # ---- logic bugs
         Mutant("ghz4_cx_flipped", "ghz4", ghz4(flip_first_cx=True), "LOGIC_BUG",
                "control/target swapped on the first CX"),
@@ -129,6 +152,9 @@ def mutants(pad_pairs: int = 40) -> list[Mutant]:
                "controlled-phase angle off by 0.02 rad"),
         Mutant("bell_tiny_phase_drift", "bell", bell(rz=0.05), "LOGIC_BUG",
                "RZ(0.05) drift: far below the shot-noise floor, but exact-sim catches it"),
+        Mutant("bell_rot_s_to_sdg", "bell_rot", bell_rot(sdg=True), "LOGIC_BUG",
+               "S became S-dagger: identical (uniform) in the all-Z, all-X and all-Y "
+               "bases; only the exact state comparison or a mixed basis sees it"),
         # ---- logic fine, noisier
         Mutant("ghz4_cx_padding", "ghz4", ghz4(pad_pairs=pad_pairs), "NOISE_REGRESSION",
                f"{2 * pad_pairs} redundant CX gates (logical identity). On IonQ the cloud "

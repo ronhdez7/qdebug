@@ -7,7 +7,7 @@ IonQ cloud simulator) and judging the two kinds of deviation separately.
 | Verdict | Meaning |
 |---|---|
 | `PASS` | Same circuit, same ideal behaviour, noise at baseline |
-| `REFACTOR_OK` | Circuit was edited, behaviour is provably unchanged (e.g. `H·H`, commuting reorder) |
+| `REFACTOR_OK` | Circuit was edited, output state is provably unchanged (e.g. `H·H`, commuting reorder) |
 | `LOGIC_BUG` | The **ideal (noise-free)** output distribution changed. Reports *which edit* did it |
 | `NOISE_REGRESSION` | Logic unchanged, but the change made the circuit noticeably noisier (e.g. +80 CX) |
 
@@ -23,8 +23,9 @@ golden circuit ──record──► snapshot.json
 
 modified circuit ──check──►  ① ideal view   (exact probs)      vs golden ideal      → LOGIC deviation
                              ② noisy view   (sampled counts)   vs its OWN ideal     → NOISE deviation
-                             ③ structural diff + hunk blame                         → which edit?
-                             ④ verdict
+                             ③ exact statevector / unitary comparison (small circuits) → what the probes can't see
+                             ④ structural diff + hunk blame                         → which edit?
+                             ⑤ verdict
 ```
 
 **Why two views?** The simulator can give the *exact* probabilities of the circuit as well as noisy
@@ -38,34 +39,40 @@ bugs; the report prints that naive result next to ours so the difference is visi
 
 | Step | File | What it does |
 |---|---|---|
-| Probe bases | `circuits.py` | Appends basis changes (Z = none, X = `H`, Y = `S†·H`) + `measure_all`. Measuring only in Z hides phase bugs (a stray `Z` before readout), so by default we measure in Z, X, Y. |
+| Probe bases | `circuits.py` | Appends basis changes (Z = none, X = `H`, Y = `S†·H`) + `measure_all`. Measuring only in Z hides phase bugs (a stray `Z` before readout), so by default we measure in Z, X, Y. A basis can also be one letter per qubit (`"XZY"`); `--random-bases N` adds N seeded mixed bases, stored in the snapshot. |
+| Exact equivalence | `equiv.py` | All-Z/all-X/all-Y probes are not a complete description of a state: two different states can agree on all three. So for edited circuits up to 20 qubits the output **statevectors** are compared exactly (up to global phase), and up to 10 qubits the **unitaries** too. `--equivalence state` (default) fails on a state change and only warns when just the unitary differs; `unitary` fails on both; `probes` switches the exact checks off. |
 | Backends | `backends.py` | `LocalBackend` (exact statevector + Aer depolarizing noise), `IonQBackend` (IonQ cloud simulator), `QiskitBackendAdapter` (any other Qiskit backend). All expose `ideal_probs()` and `noisy_counts(shots, seed)`. |
 | Snapshot | `snapshot.py` | `record()` stores the golden circuit, exact ideal distributions and a noise baseline (per-seed `mean TVD(noisy, ideal)`, its std, and the sampling-only floor from multinomial simulation). |
 | Diff + blame | `diff.py` | `difflib` over instruction signatures gives *hunks*. Each hunk is re-applied **alone** to the golden circuit; hunks that move the ideal output are the culprits, ones that don't are harmless. |
-| Classifier | `checker.py` | Logic: `max_basis TVD(ideal_mod, ideal_golden) > tol` → `LOGIC_BUG`. Noise: `noise_dev > budget` → `NOISE_REGRESSION`, with `budget = margin·(shot_floor + (hardware_part + 3σ)·cost_ratio)`. Otherwise `REFACTOR_OK` / `PASS`. |
+| Classifier | `checker.py` | Logic: `max_basis TVD(ideal_mod, ideal_golden) > tol`, or an exact state mismatch the probes missed → `LOGIC_BUG`. Noise: `noise_dev > budget` → `NOISE_REGRESSION`, with `budget = margin·(shot_floor + (hardware_part + 3σ)·cost_ratio)`. Otherwise `REFACTOR_OK` / `PASS`. |
 | Reports | `report.py` | Console table, JSON, Markdown, and a logic-vs-noise scatter PNG. |
-| CLI | `cli.py` | `record`, `check`, `demo`, `doctor`. `check` exits 1 on `LOGIC_BUG` (use in CI). |
+| CLI | `cli.py` | `record`, `check`, `demo`, `doctor`. `check` exits 1 on `LOGIC_BUG` (use in CI); `--json` / `--markdown` write reports. |
 
-Distance metric: total variation distance (TVD) between bitstring distributions.
+Distance metric: total variation distance (TVD) between bitstring distributions; trace distance for
+the exact state comparison (an upper bound on the TVD of any measurement).
 
-### What the demo shows (local backend, 10/10 correct)
+### What the demo shows (local backend, 12/12 correct)
 
 ```
 case                   verdict           logic dev  noise dev/budget  naive says
 ghz4_unchanged         PASS              0          0.031/0.082       ok
 ghz4_extra_HH          REFACTOR_OK       0          0.031/0.082       ok
 bv_oracle_reordered    REFACTOR_OK       0          0.047/0.097       ok
+qft3_dead_angle        REFACTOR_OK       0          0.024/0.082       ok       <- same state, different unitary: passes with a warning
 ghz4_cx_flipped        LOGIC_BUG         0.5        0.034/0.082       FAIL
 ghz4_stray_Z           LOGIC_BUG         1          0.030/0.082       FAIL     <- Z-basis alone can't see it; X probe does
 bv_missing_cx          LOGIC_BUG         1          0.046/0.097       FAIL
 grover3_wrong_oracle   LOGIC_BUG         0.94       0.056/0.113       FAIL
 qft3_phase_err_0.02    LOGIC_BUG         0.0071     0.024/0.082       ok       <- naive test blind
 bell_tiny_phase_drift  LOGIC_BUG         0.00062    0.011/0.079       ok       <- naive test blind
+bell_rot_s_to_sdg      LOGIC_BUG         1          0.017/0.088       ok       <- identical in Z, X and Y; exact state check catches it
 ghz4_cx_padding        NOISE_REGRESSION  0          0.177/0.082       FAIL     <- naive says "bug", it's only noise
 ```
 
 The last column is the point: the naive test fails both a real bug and a pure-noise change (it can't
-tell them apart), and passes two real bugs that sit below the shot-noise floor.
+tell them apart), and passes three real bugs: two that sit below the shot-noise floor and one
+(`S` → `S†`) that turns the state into an orthogonal one without moving any all-Z, all-X or all-Y
+distribution.
 
 ---
 
@@ -77,12 +84,14 @@ qdebug/
   circuits.py     measurement stripping, probe bases, signatures, QPY (de)serialisation
   backends.py     LocalBackend / IonQBackend / QiskitBackendAdapter
   snapshot.py     record(), save(), load()
+  equiv.py        exact statevector / unitary distances (global-phase free)
   diff.py         structural diff, hunks, hybrid circuits for blame
   checker.py      check(), Verdict, noise budget
   report.py       console / markdown / json / png
   cli.py          python -m qdebug ...
   demo_suite.py   golden circuits + injected bugs with expected verdicts
 examples/suite.py     example user suite (env-var bug toggles)
+examples/snapshots/   its committed golden snapshots (what CI checks against)
 notebooks/qdebug_quickstart.ipynb
 tests/                pytest suite (incl. a fake qiskit-ionq provider)
 ```
@@ -95,7 +104,8 @@ tests/                pytest suite (incl. a fake qiskit-ionq provider)
 python -m venv .venv && source .venv/bin/activate      # Python 3.10+
 pip install -r requirements.txt                         # or: pip install -e ".[all]"
 
-python -m pytest -q                                     # about a minute
+python -m pytest -q                                     # a few seconds
+python -m pytest -q -m slow                             # 1,020 unchanged-circuit checks, ~35 s
 python -m qdebug doctor --backend local                 # smoke test
 python -m qdebug demo   --backend local --assert-all    # bug-injection demo → demo_out/report.{json,md,png}
 ```
@@ -104,19 +114,24 @@ Use it on your own circuits (this is the actual regression workflow):
 
 ```bash
 # 1. on main: save golden behaviour (write a file with `def circuits() -> {name: QuantumCircuit}`)
-python -m qdebug record --suite examples/suite.py --snapshots snapshots
+python -m qdebug record --suite examples/suite.py --snapshots examples/snapshots
 
 # 2. on your branch, after editing circuits: regress
-python -m qdebug check  --suite examples/suite.py --snapshots snapshots -v   # exit 1 on LOGIC_BUG
-python -m qdebug check  --suite examples/suite.py --strict                   # also fail on NOISE_REGRESSION
+S="--suite examples/suite.py --snapshots examples/snapshots"
+python -m qdebug check $S -v                        # exit 1 on LOGIC_BUG
+python -m qdebug check $S --strict                  # also fail on NOISE_REGRESSION
+python -m qdebug check $S --equivalence unitary     # also fail if only the unitary changed
+python -m qdebug check $S --markdown report.md      # report for a PR comment
 
-# no-edit demo of step 2:
-QDEBUG_DEMO_BUG=cx_flip python -m qdebug check --suite examples/suite.py -v
-QDEBUG_DEMO_BUG=padding python -m qdebug check --suite examples/suite.py --strict
+# no-edit demo of step 2 (the example snapshots are already committed):
+QDEBUG_DEMO_BUG=cx_flip python -m qdebug check $S -v
+QDEBUG_DEMO_BUG=padding python -m qdebug check $S --strict
 ```
 
-Commit `snapshots/*.json` so CI can run `qdebug check` (the demo writes its own under `demo_out/`,
-which is gitignored). Library use:
+Commit your snapshot directory so CI can run `qdebug check`;
+[`.github/workflows/qdebug-check.yml`](.github/workflows/qdebug-check.yml) does exactly that for the
+example suite on every pull request and puts the Markdown report in the job summary and a PR
+comment. Library use:
 
 ```python
 from qdebug import make_backend, record, check
@@ -174,11 +189,16 @@ be = QiskitBackendAdapter(platform_backend)      # noisy counts from it, exact i
 
 ## 5. Honest status and limitations
 
-* **Tested:** the suite passes locally (`pytest`), including 60 repeated checks of unchanged circuits
-  (5 circuits x 12 noise seeds) with zero false alarms, and the full IonQ code path against a **fake** `qiskit-ionq` provider that
+* **Tested:** the suite passes locally (`pytest`), including 1,020 repeated checks of unchanged
+  circuits (6 circuits x 170 noise seeds, `-m slow`) with zero false alarms, and the full IonQ code path against a **fake** `qiskit-ionq` provider that
   mimics its documented API (options, job shapes).
 * **Not yet exercised against live IonQ**: this was built without an IonQ API key. Run
   `qdebug doctor --backend ionq` first; it is designed to expose bit-order or API surprises immediately.
+  `IONQ_API_KEY=... python -m pytest -m ionq -v` then checks the assumptions the fake provider encodes.
+* **The pull-request workflow has not run on GitHub yet** (nothing has been pushed).
+* **Exact equivalence is a small-circuit feature**: statevectors up to 20 qubits, unitaries up to 10.
+  Above that, "behaviour identical" rests on the probe bases (a warning says so); 4 random mixed bases
+  are added automatically when recording circuits that wide.
 * **Qollab:** I could not find public documentation of Qollab's own runtime, so the instructions above
   rely only on what is documented for IonQ + Qiskit. Check your hackathon's Qollab page for how keys or
   credits are provisioned.
@@ -192,11 +212,12 @@ be = QiskitBackendAdapter(platform_backend)      # noisy counts from it, exact i
 
 ## 6. Ideas for the remaining hackathon hours
 
-1. Equivalence proof via unitary/stabilizer checks for `REFACTOR_OK` (stronger than probe bases).
-2. A GitHub Action that runs `qdebug check` on PRs and comments the Markdown report.
-3. Noise-aware blame: rank culprit hunks by estimated cost increase for `NOISE_REGRESSION`.
-4. Parameter sweeps (variational circuits): snapshot at several parameter points.
-5. Native-gate mode on IonQ to stop server-side optimization when you want to measure raw noise.
+See [ROADMAP.md](ROADMAP.md) for the plan and what is done. Still open:
+
+1. Noise-aware blame: rank culprit hunks by estimated cost increase for `NOISE_REGRESSION`.
+2. Parameter sweeps (variational circuits): snapshot at several parameter points.
+3. Native-gate mode on IonQ to stop server-side optimization when you want to measure raw noise.
+4. Stabilizer-based equivalence for wide Clifford circuits, beyond the 20-qubit exact limit.
 
 ## License
 

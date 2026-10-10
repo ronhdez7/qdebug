@@ -10,11 +10,12 @@ from qiskit import QuantumCircuit
 
 from . import circuits as C
 from .backends import Backend
+from .equiv import MAX_STATE_QUBITS
 from .stats import Dist, mean_std, sample_counts, shot_noise_floor, tvd, counts_to_probs
 
 import numpy as np
 
-SNAPSHOT_VERSION = 1
+SNAPSHOT_VERSION = 2   # 2: bases may be per-qubit strings (e.g. "XZY")
 
 
 @dataclass
@@ -52,6 +53,12 @@ class Snapshot:
     @staticmethod
     def from_dict(d: dict) -> "Snapshot":
         d = dict(d)
+        version = d.get("version", 1)
+        if version > SNAPSHOT_VERSION:
+            raise ValueError(
+                f"snapshot {d.get('name')!r} has format version {version}, newer "
+                f"than this qdebug understands ({SNAPSHOT_VERSION}); upgrade qdebug "
+                "or re-record the snapshot.")
         d["noise"] = NoiseBaseline(**d["noise"])
         return Snapshot(**d)
 
@@ -64,10 +71,21 @@ def noise_score(counts_list: list[dict], ideal_list: list[Dist]) -> float:
 
 def record(name: str, qc: QuantumCircuit, backend: Backend, *,
            bases: tuple[str, ...] = C.PROBE_BASES, shots: int = 1000,
-           n_seeds: int = 4, base_seed: int = 1000) -> Snapshot:
-    """Run the golden circuit once ideally and ``n_seeds`` times noisily."""
+           n_seeds: int = 4, base_seed: int = 1000,
+           random_bases: int | None = None) -> Snapshot:
+    """Run the golden circuit once ideally and ``n_seeds`` times noisily.
+
+    ``random_bases`` adds that many seeded per-qubit (mixed) probe bases on top
+    of ``bases``. By default none are added while the circuit is small enough
+    for ``check`` to compare statevectors exactly, and 4 are added above that,
+    where the probes are the only evidence.
+    """
     unitary = C.strip_measurements(qc)
     unitary.name = name
+    if random_bases is None:
+        random_bases = 0 if unitary.num_qubits <= MAX_STATE_QUBITS else 4
+    bases = tuple(dict.fromkeys(
+        tuple(bases) + tuple(C.random_bases(unitary.num_qubits, random_bases, base_seed))))
     probe_circs = C.probes(unitary, bases)
 
     ideal_list = backend.ideal_probs(probe_circs)

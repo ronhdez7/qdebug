@@ -30,6 +30,13 @@ def _add_common(p: argparse.ArgumentParser) -> None:
     p.add_argument("--shots", type=int, default=1000)
     p.add_argument("--seeds", type=int, default=4, help="noise-baseline repetitions")
     p.add_argument("--bases", default="ZXY", help="probe bases, e.g. ZX or ZXY")
+    p.add_argument("--random-bases", type=int, default=None,
+                   help="extra seeded mixed-basis probes per circuit when recording "
+                        "(default: 0 up to 20 qubits, 4 above)")
+    p.add_argument("--equivalence", choices=["probes", "state", "unitary"],
+                   default="state",
+                   help="what counts as unchanged behaviour: same probe "
+                        "distributions, same output state, or same unitary")
     p.add_argument("--logic-tol", type=float, default=None)
     p.add_argument("--snapshots", default="snapshots")
 
@@ -57,7 +64,8 @@ def cmd_record(a) -> int:
     be = _backend(a)
     for name, qc in load_suite(a.suite).items():
         _say(f"recording {name} on {be.name} ...")
-        snap = record(name, qc, be, bases=tuple(a.bases), shots=a.shots, n_seeds=a.seeds)
+        snap = record(name, qc, be, bases=tuple(a.bases), shots=a.shots,
+                      n_seeds=a.seeds, random_bases=a.random_bases)
         p = save(snap, a.snapshots)
         _say(f"  saved {p}  (noise baseline {snap.noise.mean:.4f} +/- {snap.noise.std:.4f})")
     return 0
@@ -65,7 +73,7 @@ def cmd_record(a) -> int:
 
 def cmd_check(a) -> int:
     be = _backend(a)
-    cfg = CheckConfig(logic_tol=a.logic_tol)
+    cfg = CheckConfig(logic_tol=a.logic_tol, equivalence=a.equivalence)
     reports = []
     for name, qc in load_suite(a.suite).items():
         snap = load(name, a.snapshots)
@@ -76,13 +84,15 @@ def cmd_check(a) -> int:
     _say(summary_table(reports))
     if a.json:
         save_json(reports, a.json)
+    if a.markdown:
+        Path(a.markdown).write_text(to_markdown(reports, "qdebug check"))
     bad = {Verdict.LOGIC_BUG} | ({Verdict.NOISE_REGRESSION} if a.strict else set())
     return 1 if any(r.verdict in bad for r in reports) else 0
 
 
 def cmd_demo(a) -> int:
     be = _backend(a)
-    cfg = CheckConfig(logic_tol=a.logic_tol)
+    cfg = CheckConfig(logic_tol=a.logic_tol, equivalence=a.equivalence)
     out = Path(a.out)
     out.mkdir(parents=True, exist_ok=True)
     _say(f"backend: {be.describe()}")
@@ -90,7 +100,7 @@ def cmd_demo(a) -> int:
     snaps = {}
     for name, qc in demo_suite.golden_circuits().items():
         snaps[name] = record(name, qc, be, bases=tuple(a.bases), shots=a.shots,
-                             n_seeds=a.seeds)
+                             n_seeds=a.seeds, random_bases=a.random_bases)
         save(snaps[name], out / "snapshots")
         _say(f"  {name:9s} noise baseline {snaps[name].noise.mean:.4f} "
              f"(sampling alone ~{snaps[name].noise.shot_mean:.4f})")
@@ -143,6 +153,7 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--suite", required=True)
     p.add_argument("--strict", action="store_true", help="also fail on NOISE_REGRESSION")
     p.add_argument("--json", help="write full report JSON here")
+    p.add_argument("--markdown", help="write a Markdown report here (for PR comments)")
     p.add_argument("-v", "--verbose", action="store_true")
     _add_common(p)
     p.set_defaults(fn=cmd_check)

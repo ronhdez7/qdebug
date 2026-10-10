@@ -1,0 +1,79 @@
+{
+  "bases": [
+    "Z",
+    "X",
+    "Y"
+  ],
+  "circuit_b64": "UUlTS0lUDQIFAgAAAAAAAAABcHEADmYACAAAAAMAAAAAAAAAAAAAAAIAAAABAAAAAAAAAAQAAAAAc3dhcF90ZXN0X2xpa2UAAAAAAAAAAHt9cQEAAAADAAEBcQAAAAAAAAAAAAAAAAAAAAEAAAAAAAAAAgAAAAAAAAAAAAUAAAAAAAAAAQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAASEdhdGVxAAAAAAAGAAAAAQAAAAEAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFJZR2F0ZXEAAAABZgAAAAAAAAAIZmZmZmZm5j8ACQAAAAAAAAADAAAAAAAAAAAAAAAAAAAAAAAAAQAAAAFDU3dhcEdhdGVxAAAAAHEAAAABcQAAAAIABQAAAAAAAAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABIR2F0ZXEAAAAAAAAA////////////////AAAAAAAAAAA=",
+  "created": "2026-10-10T02:13:12+00:00",
+  "ideal": {
+    "X": {
+      "000": 0.20552721090471138,
+      "001": 0.20552721090471138,
+      "010": 0.04447278909528861,
+      "011": 0.20552721090471138,
+      "100": 0.20552721090471138,
+      "101": 0.04447278909528861,
+      "110": 0.04447278909528861,
+      "111": 0.04447278909528861
+    },
+    "Y": {
+      "000": 0.12500000000000003,
+      "001": 0.12500000000000003,
+      "010": 0.20552721090471138,
+      "011": 0.04447278909528861,
+      "100": 0.04447278909528861,
+      "101": 0.20552721090471138,
+      "110": 0.12500000000000003,
+      "111": 0.12500000000000003
+    },
+    "Z": {
+      "000": 0.8824210936422442,
+      "010": 0.029394726589438952,
+      "011": 0.029394726589438952,
+      "100": 0.029394726589438952,
+      "101": 0.029394726589438952
+    }
+  },
+  "name": "swap_test_like",
+  "noise": {
+    "mean": 0.035298923785574234,
+    "noise_model": {
+      "backend": "local-aer",
+      "noise": "depolarizing",
+      "p1": 0.0005,
+      "p2": 0.005,
+      "readout": 0.0
+    },
+    "scores": [
+      0.029799150981939082,
+      0.041754989543514955,
+      0.03371082810509082,
+      0.03593072651175208
+    ],
+    "seeds": [
+      1000,
+      1001,
+      1002,
+      1003
+    ],
+    "shot_floor": 0.04606551630235206,
+    "shot_mean": 0.02677351388785409,
+    "shots": 1000,
+    "std": 0.004994981098984439
+  },
+  "signature": [
+    "h q0",
+    "ry(0.7) q1",
+    "cswap q0,q1,q2",
+    "h q0"
+  ],
+  "stats": {
+    "depth": 3,
+    "n_1q": 3,
+    "n_2q": 0,
+    "n_multi": 1,
+    "n_qubits": 3
+  },
+  "version": 2
+}

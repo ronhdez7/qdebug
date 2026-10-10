@@ -45,21 +45,44 @@ def strip_measurements(qc: QuantumCircuit) -> QuantumCircuit:
 
 
 def with_probe(qc: QuantumCircuit, basis: str) -> QuantumCircuit:
-    """Append a basis change + measure_all so the output reveals ``basis``."""
+    """Append a basis change + measure_all so the output reveals ``basis``.
+
+    ``basis`` is either one letter applied to every qubit (``"X"``) or one
+    letter per qubit, qubit 0 first (``"XZY"`` measures q0 in X, q1 in Z, q2 in
+    Y). Mixed bases see correlations the uniform ones cannot.
+    """
     basis = basis.upper()
-    if basis not in PROBE_BASES:
-        raise ValueError(f"unknown basis {basis!r}; choose from {PROBE_BASES}")
+    per_qubit = basis * qc.num_qubits if len(basis) == 1 else basis
+    if len(per_qubit) != qc.num_qubits or set(per_qubit) - set(PROBE_BASES):
+        raise ValueError(
+            f"bad basis {basis!r} for {qc.num_qubits} qubits: use one of "
+            f"{PROBE_BASES} or one letter per qubit")
     probe = qc.copy()
     probe.name = f"{qc.name}__{basis}"
-    if basis == "X":
-        for q in range(probe.num_qubits):
+    for q, b in enumerate(per_qubit):
+        if b == "X":
             probe.h(q)
-    elif basis == "Y":
-        for q in range(probe.num_qubits):
+        elif b == "Y":
             probe.sdg(q)
             probe.h(q)
     probe.measure_all()
     return probe
+
+
+def random_bases(n_qubits: int, k: int, seed: int) -> list[str]:
+    """Up to ``k`` distinct seeded per-qubit bases, none of them uniform."""
+    import numpy as np
+
+    if n_qubits < 2 or k <= 0:
+        return []
+    rng = np.random.default_rng(seed)
+    out: list[str] = []
+    limit = min(k, 3 ** n_qubits - 3)
+    while len(out) < limit:
+        b = "".join(rng.choice(PROBE_BASES, size=n_qubits))
+        if len(set(b)) > 1 and b not in out:
+            out.append(b)
+    return out
 
 
 def probes(qc: QuantumCircuit, bases: tuple[str, ...]) -> list[QuantumCircuit]:
@@ -132,7 +155,9 @@ def circuit_stats(qc: QuantumCircuit) -> CircuitStats:
 
 def circuit_to_b64(qc: QuantumCircuit) -> str:
     buf = io.BytesIO()
-    qpy.dump(qc, buf)
+    # oldest QPY format this qiskit can write, so a committed snapshot still
+    # loads for teammates and CI runners on an older qiskit
+    qpy.dump(qc, buf, version=qpy.QPY_COMPATIBILITY_VERSION)
     return base64.b64encode(buf.getvalue()).decode("ascii")
 
 

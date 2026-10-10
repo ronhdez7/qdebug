@@ -26,6 +26,7 @@ from enum import Enum
 import numpy as np
 
 from . import circuits as C
+from . import equiv as E
 from .backends import Backend, exact_probs, MAX_LOCAL_QUBITS
 from .diff import Hunk, build_hybrid, compress, diff_circuits
 from .snapshot import Snapshot, noise_score
@@ -49,6 +50,11 @@ class CheckConfig:
     blame: bool = True              # hunk-level culprit search on LOGIC_BUG
     max_hunks: int = 12
     cross_check_local: bool = True  # compare IonQ ideal vs local exact
+    # What "behaviour unchanged" means for an edited circuit:
+    #   "probes"  - same distributions in the snapshot's probe bases only
+    #   "state"   - same output state from |0...0> (exact, when small enough)
+    #   "unitary" - same unitary, i.e. also on every other input state
+    equivalence: str = "state"
 
 
 @dataclass
@@ -79,6 +85,10 @@ class Report:
     hunks: list[Hunk] = field(default_factory=list)
     blame: list[HunkBlame] = field(default_factory=list)
     warnings: list[str] = field(default_factory=list)
+    # strongest comparison that backed the verdict: probes | statevector | unitary
+    equivalence: str = "probes"
+    state_dist: float | None = None     # trace distance of output states
+    unitary_dist: float | None = None   # phase-free distance of the unitaries
 
     def to_dict(self) -> dict:
         d = asdict(self)
@@ -100,6 +110,8 @@ def noise_budget(snap: Snapshot, scale: float, margin: float) -> float:
 def check(name: str, qc, snap: Snapshot, backend: Backend,
           cfg: CheckConfig | None = None) -> Report:
     cfg = cfg or CheckConfig()
+    if cfg.equivalence not in ("probes", "state", "unitary"):
+        raise ValueError(f"unknown equivalence level {cfg.equivalence!r}")
     tol = cfg.logic_tol if cfg.logic_tol is not None else backend.default_logic_tol
     shots = cfg.shots or snap.noise.shots
     bases = tuple(snap.bases)
@@ -145,6 +157,17 @@ def check(name: str, qc, snap: Snapshot, backend: Backend,
                 f"TVD={gap:.3g}: check bit ordering / compilation before trusting "
                 f"verdicts.")
 
+    # ---- 1b. exact comparison: catches what the probe bases cannot see ---
+    method, state_dist, unitary_dist = "probes", None, None
+    if hunks and cfg.equivalence != "probes":
+        if mod.num_qubits <= E.MAX_STATE_QUBITS:
+            state_dist, method = E.state_distance(golden, mod), "statevector"
+        if mod.num_qubits <= E.MAX_UNITARY_QUBITS:
+            unitary_dist, method = E.unitary_distance(golden, mod), "unitary"
+    state_bug = state_dist is not None and state_dist > E.EXACT_TOL
+    unitary_only = (not state_bug and logic_dev <= tol
+                    and unitary_dist is not None and unitary_dist > E.EXACT_TOL)
+
     # ---- 2. noise: sampled counts vs the circuit's OWN ideal ------------
     counts = backend.noisy_counts(probe_circs, shots, cfg.seed)
     noise_dev = noise_score(counts, ideal_mod)
@@ -157,15 +180,32 @@ def check(name: str, qc, snap: Snapshot, backend: Backend,
     common = dict(logic_dev=logic_dev, per_basis_logic_dev=per_basis,
                   noise_dev=noise_dev, noise_budget=budget,
                   noise_budget_scaled=budget_scaled, naive_dev=naive_dev,
-                  naive_fails=naive_dev > cfg.naive_threshold)
+                  naive_fails=naive_dev > cfg.naive_threshold,
+                  equivalence=method, state_dist=state_dist,
+                  unitary_dist=unitary_dist)
 
     # ---- 3. verdict ------------------------------------------------------
-    if logic_dev > tol:
-        worst = max(per_basis, key=per_basis.get)
+    hidden_state_bug = state_bug and logic_dev <= tol
+    unitary_bug = unitary_only and cfg.equivalence == "unitary"
+    if logic_dev > tol or hidden_state_bug or unitary_bug:
         blame = _blame(golden, mod, hunks, snap, backend, bases, tol, cfg) \
             if cfg.blame else []
-        reason = (f"ideal (noise-free) output moved by TVD={logic_dev:.4g} in the "
-                  f"{worst} basis (tol {tol:g}) - this is a logic change, not noise.")
+        if hidden_state_bug:
+            common["logic_dev"] = state_dist
+            reason = (f"the output state moved (trace distance {state_dist:.4g}) "
+                      f"although every probed basis ({', '.join(bases)}) shows an "
+                      "identical distribution - only correlations between "
+                      "different bases reveal it. Exact statevector comparison "
+                      "caught it; this is a logic change, not noise.")
+        elif unitary_bug:
+            common["logic_dev"] = unitary_dist
+            reason = (f"output from |0...0> is unchanged, but the unitary differs "
+                      f"(distance {unitary_dist:.4g}): other input states give a "
+                      "different output. Flagged because equivalence='unitary'.")
+        else:
+            worst = max(per_basis, key=per_basis.get)
+            reason = (f"ideal (noise-free) output moved by TVD={logic_dev:.4g} in the "
+                      f"{worst} basis (tol {tol:g}) - this is a logic change, not noise.")
         culprits = [b for b in blame if b.culprit]
         if culprits:
             reason += " Culprit edit(s): " + "; ".join(
@@ -174,6 +214,18 @@ def check(name: str, qc, snap: Snapshot, backend: Backend,
         elif blame:
             reason += " No single edit explains it - the edits interact."
         return make(Verdict.LOGIC_BUG, reason, blame=blame, **common)
+
+    if unitary_only:
+        warnings.append(
+            f"equivalent only from |0...0>: the unitaries differ (distance "
+            f"{unitary_dist:.3g}), so this edit is not a drop-in replacement if "
+            "the circuit is reused on other input states. Use "
+            "equivalence='unitary' to treat that as a LOGIC_BUG.")
+    elif hunks and method == "probes" and cfg.equivalence != "probes":
+        warnings.append(
+            f"{mod.num_qubits} qubits is too wide for exact comparison "
+            f"(limit {E.MAX_STATE_QUBITS}); 'behaviour identical' rests on the "
+            f"probe bases only ({', '.join(bases)}).")
 
     if noise_dev > budget:
         explained = noise_dev <= budget_scaled
@@ -214,4 +266,15 @@ def _blame(golden, mod, hunks, snap, backend, bases, tol, cfg) -> list[HunkBlame
     for k, (hid, p) in enumerate(zip(owner, ideals)):
         b = bases[k % len(bases)]
         effects[hid] = max(effects[hid], tvd(p, snap.ideal[b]))
+    # same exact fallback as check(): a hunk the probes cannot see may still
+    # move the state (or, in unitary mode, only the unitary)
+    for h in hunks:
+        if effects[h.index] > tol or cfg.equivalence == "probes":
+            continue
+        hyb = build_hybrid(golden, mod, hunks, {h.index})
+        if mod.num_qubits <= E.MAX_STATE_QUBITS:
+            effects[h.index] = max(effects[h.index], E.state_distance(golden, hyb))
+        if cfg.equivalence == "unitary" and effects[h.index] <= tol \
+                and mod.num_qubits <= E.MAX_UNITARY_QUBITS:
+            effects[h.index] = E.unitary_distance(golden, hyb)
     return [HunkBlame(h, effects[h.index], effects[h.index] > tol) for h in hunks]

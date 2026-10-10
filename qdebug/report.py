@@ -20,6 +20,10 @@ def format_report(r: Report, verbose: bool = True) -> str:
                      f"   |  noise dev: {nd}  budget: {nb}"
                      f"   |  naive noisy-vs-golden: "
                      + (f"{r.naive_dev:.4f}" if r.naive_dev is not None else "-"))
+        if r.state_dist is not None:
+            ud = f"{r.unitary_dist:.3g}" if r.unitary_dist is not None else "-"
+            lines.append(f"  exact check ({r.equivalence}): state distance "
+                         f"{r.state_dist:.3g}  |  unitary distance {ud}")
         for h in r.hunks:
             lines.append("  " + h.pretty().replace("\n", "\n  "))
         for b in r.blame:
@@ -67,6 +71,11 @@ def to_markdown(reports: list[Report], title: str = "qdebug report") -> str:
                 out += [f"@@ {h.kind} @@"] + [f"- {s}" for s in compress(h.removed)] \
                        + [f"+ {s}" for s in compress(h.added)]
             out += ["```", ""]
+        for b in r.blame:
+            out.append(f"- hunk {b.hunk.index}: effect {b.effect:.3g}"
+                       + (" **(culprit)**" if b.culprit else ""))
+        if r.blame:
+            out.append("")
         for w in r.warnings:
             out.append(f"> WARNING: {w}\n")
     return "\n".join(out)

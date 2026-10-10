@@ -1,0 +1,36 @@
+# Example of qdebug as a pull-request gate: checks the example suite against its
+# committed golden snapshots and reports which edit changed the logic, if any.
+# Copy this into your own repo and point --suite / --snapshots at your circuits.
+name: qdebug check
+
+on:
+  pull_request:
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: pip install -r requirements.txt
+      - name: qdebug check
+        run: >
+          python -m qdebug check --suite examples/suite.py
+          --snapshots examples/snapshots --markdown report.md -v
+      - name: Job summary
+        if: always()
+        run: test -f report.md && cat report.md >> "$GITHUB_STEP_SUMMARY"
+      - name: PR comment
+        # forks get a read-only token, so the comment is best-effort
+        if: always() && github.event.pull_request.head.repo.full_name == github.repository
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: test -f report.md && gh pr comment ${{ github.event.pull_request.number }} --body-file report.md
