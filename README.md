@@ -109,8 +109,9 @@ How to read this honestly:
   83% at 32. The budget is conservative, so small noise increases pass.
 * **A limitation the benchmark exposed:** on `bell_rot`, noise is never detected, even at 32 pairs.
   Depolarizing noise pushes outputs towards uniform, and that circuit is already uniform in every
-  probed basis. Recording with `--random-bases` adds mixed bases that should see it; that is not
-  yet automatic for small circuits.
+  probed basis. Adding mixed bases with `--random-bases` does not fix it (tried with 2 and 4: still
+  0 of 20 runs flagged), because the noise score is the mean over all bases and the blind ones
+  dilute the one that sees the noise. Scoring the worst basis instead of the mean is the likely fix.
 * Local depolarizing noise only. Not yet run on an IonQ noise model.
 
 ---

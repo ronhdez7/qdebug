@@ -115,8 +115,9 @@ These were found by reading the code against the README. Each is picked up in a 
    hand-picked weights. Not calibrated against any IonQ noise model.
 9. *(closed, pending first push)* **No CI.** Nothing runs the tests on push.
 12. *(found by the benchmark, open)* **Noise is invisible on circuits whose output is uniform in
-    every probed basis** (`bell_rot`): `NOISE_REGRESSION` is never raised for them. Adding a mixed
-    probe basis automatically when the uniform ones are all flat would fix it.
+    every probed basis** (`bell_rot`): `NOISE_REGRESSION` is never raised for them. Extra mixed
+    bases alone do not help (tested), because the noise score averages over bases; it needs a
+    per-basis (worst-basis) score and budget.
 10. **Scaling limits.** Exact local simulation caps at 24 qubits; blame is skipped above 12 hunks;
     mid-circuit measurement, classical control and parameterized circuits are unsupported
     *(parameterized circuits are now supported through parameter sweeps)*.
