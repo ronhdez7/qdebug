@@ -63,7 +63,7 @@ def noise_score(counts_list: list[dict], ideal_list: list[Dist]) -> float:
 
 
 def record(name: str, qc: QuantumCircuit, backend: Backend, *,
-           bases: tuple[str, ...] = ("Z", "X"), shots: int = 1000,
+           bases: tuple[str, ...] = C.PROBE_BASES, shots: int = 1000,
            n_seeds: int = 4, base_seed: int = 1000) -> Snapshot:
     """Run the golden circuit once ideally and ``n_seeds`` times noisily."""
     unitary = C.strip_measurements(qc)

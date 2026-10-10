@@ -84,7 +84,7 @@ qdebug/
   demo_suite.py   golden circuits + injected bugs with expected verdicts
 examples/suite.py     example user suite (env-var bug toggles)
 notebooks/qdebug_quickstart.ipynb
-tests/                35 tests (incl. a fake qiskit-ionq provider)
+tests/                pytest suite (incl. a fake qiskit-ionq provider)
 ```
 
 ---
@@ -95,7 +95,7 @@ tests/                35 tests (incl. a fake qiskit-ionq provider)
 python -m venv .venv && source .venv/bin/activate      # Python 3.10+
 pip install -r requirements.txt                         # or: pip install -e ".[all]"
 
-python -m pytest -q                                     # 35 tests, a few seconds
+python -m pytest -q                                     # about a minute
 python -m qdebug doctor --backend local                 # smoke test
 python -m qdebug demo   --backend local --assert-all    # bug-injection demo → demo_out/report.{json,md,png}
 ```
@@ -115,7 +115,8 @@ QDEBUG_DEMO_BUG=cx_flip python -m qdebug check --suite examples/suite.py -v
 QDEBUG_DEMO_BUG=padding python -m qdebug check --suite examples/suite.py --strict
 ```
 
-Commit `snapshots/*.json` so CI can run `qdebug check`. Library use:
+Commit `snapshots/*.json` so CI can run `qdebug check` (the demo writes its own under `demo_out/`,
+which is gitignored). Library use:
 
 ```python
 from qdebug import make_backend, record, check
@@ -173,8 +174,8 @@ be = QiskitBackendAdapter(platform_backend)      # noisy counts from it, exact i
 
 ## 5. Honest status and limitations
 
-* **Tested:** 35 tests pass locally (`pytest`), including 1,000 repeated checks of unchanged circuits
-  with zero false alarms, and the full IonQ code path against a **fake** `qiskit-ionq` provider that
+* **Tested:** the suite passes locally (`pytest`), including 60 repeated checks of unchanged circuits
+  (5 circuits x 12 noise seeds) with zero false alarms, and the full IonQ code path against a **fake** `qiskit-ionq` provider that
   mimics its documented API (options, job shapes).
 * **Not yet exercised against live IonQ**: this was built without an IonQ API key. Run
   `qdebug doctor --backend ionq` first; it is designed to expose bit-order or API surprises immediately.
@@ -196,3 +197,7 @@ be = QiskitBackendAdapter(platform_backend)      # noisy counts from it, exact i
 3. Noise-aware blame: rank culprit hunks by estimated cost increase for `NOISE_REGRESSION`.
 4. Parameter sweeps (variational circuits): snapshot at several parameter points.
 5. Native-gate mode on IonQ to stop server-side optimization when you want to measure raw noise.
+
+## License
+
+MIT, see [LICENSE](LICENSE).

@@ -8,7 +8,7 @@ from dataclasses import dataclass
 from qiskit import QuantumCircuit, qpy
 
 # Measurement bases we can probe. Measuring only in Z hides phase bugs
-# (e.g. a stray Z before readout), so by default we also measure in X.
+# (e.g. a stray Z before readout), so by default we also measure in X and Y.
 PROBE_BASES = ("Z", "X", "Y")
 
 

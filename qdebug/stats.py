@@ -45,12 +45,6 @@ def tvd(p: Dist, q: Dist) -> float:
     return 0.5 * sum(abs(p.get(k, 0.0) - q.get(k, 0.0)) for k in keys)
 
 
-def hellinger_fidelity(p: Dist, q: Dist) -> float:
-    keys = set(p) | set(q)
-    bc = sum(np.sqrt(p.get(k, 0.0) * q.get(k, 0.0)) for k in keys)
-    return float(bc**2)
-
-
 def sample_counts(p: Dist, shots: int, rng: np.random.Generator) -> Dist:
     keys = sorted(p)
     probs = np.array([p[k] for k in keys], dtype=float)
