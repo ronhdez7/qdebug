@@ -98,6 +98,8 @@
   .tab[aria-pressed="true"] { background: var(--surface-1); color: var(--text-primary);
     border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
   .lesson { border-left: 3px solid var(--accent); }
+  /* challenge mode, before the reader answers: no verdicts, no edit controls */
+  body.concealed #verdictRow, body.concealed #controlsRow { display: none; }
   h2.big { font-size: 22px; line-height: 1.2; margin: 2px 0 8px; }
   .lesson p { max-width: 78ch; }
   .try { background: var(--page); border-radius: 8px; padding: 10px 12px; }
@@ -192,6 +194,7 @@
   <nav class="tabs" id="modes" aria-label="Mode"></nav>
 
   <section class="card lesson" id="lessonCard" data-modes="lesson"></section>
+  <section class="card lesson" id="challengeCard" data-modes="challenge"></section>
 
   <div class="card" data-modes="sandbox">
     <h2>Quick situations</h2>
@@ -303,5 +306,6 @@
 <script src="qdebug-demo.js"></script>
 <script src="app.js"></script>
 <script src="lesson.js"></script>
+<script src="challenge.js"></script>
 </body>
 </html>
