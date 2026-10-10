@@ -87,6 +87,7 @@ qdebug/
   report.py       console / Markdown / JSON / PNG
   cli.py          record, check, demo, doctor
   demo_suite.py   golden circuits + mutants with expected verdicts
+  benchmark.py    random-mutant benchmark; results committed under docs/benchmark/
 docs/               browser demo: index.html (UI) + qdebug-demo.js (engine, mirrors the package)
 examples/           example user suite + its committed snapshots (used by the PR workflow)
 notebooks/          quickstart notebook
@@ -119,6 +120,9 @@ tests/              pytest; test_ionq_adapter.py uses a fake qiskit-ionq provide
   and breaks callers without a `__main__` guard on Python 3.14.
 - **The browser demo mirrors the package.** If you change the verdict rules, the noise budget or
   the probe bases in Python, change `docs/qdebug-demo.js` to match and keep `test_web_demo.py` green.
+- **Benchmark numbers in the README come from `python -m qdebug benchmark`.** If you change the
+  checker, the demo circuits or the mutation operators, rerun it and update the README figures and
+  `docs/benchmark/` in the same commit. Never edit the numbers by hand.
 - **`demo_suite.mutants()` is the accuracy benchmark.** New capability means new mutants with
   expected verdicts, added in the same commit.
 

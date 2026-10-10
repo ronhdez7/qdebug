@@ -53,7 +53,7 @@ bugs; the report prints that naive result next to ours so the difference is visi
 | Cost calibration | `calibrate.py` | `record --calibrate` measures the per-gate noise of 1-qubit and 2-qubit gates on the backend (identity circuits of X·X and CX·CX pairs) and stores the ratio in the snapshot, replacing the built-in guess that a 1-qubit gate costs 0.05 of a 2-qubit gate. |
 | Parameter sweeps | `circuits.py` | A suite circuit with free `Parameter`s is recorded and checked at `--param-points N` (default 3) seeded points as `name@p0`, `name@p1`, ... Values depend only on the parameter's name, so golden and edited circuits always get the same angles. |
 | Reports | `report.py` | Console table, JSON, Markdown, and a logic-vs-noise scatter PNG. |
-| CLI | `cli.py` | `record`, `check`, `demo`, `doctor`. `check` exits 1 on `LOGIC_BUG` (use in CI); `--json` / `--markdown` write reports. |
+| CLI | `cli.py` | `record`, `check`, `demo`, `benchmark`, `doctor`. `check` exits 1 on `LOGIC_BUG` (use in CI); `--json` / `--markdown` write reports. |
 
 Distance metric: total variation distance (TVD) between bitstring distributions; trace distance for
 the exact state comparison (an upper bound on the TVD of any measurement).
@@ -81,6 +81,38 @@ tell them apart), and passes three real bugs: two that sit below the shot-noise 
 (`S` → `S†`) that turns the state into an orthogonal one without moving any all-Z, all-X or all-Y
 distribution.
 
+### Benchmark: 757 random mutants
+
+`python -m qdebug benchmark` generates random single-edit mutants of the six demo circuits (deleted
+gates, swapped control/target, wrong qubit, wrong gate, angle errors, stray rotations and Paulis,
+cancelling pairs, reordered gates) and compares four tests. Ground truth is the exact output state:
+440 mutants changed it, 317 did not. Full tables: [docs/benchmark/benchmark.md](docs/benchmark/benchmark.md).
+
+![benchmark](docs/benchmark/benchmark.png)
+
+| | naive shot test | exact, Z only | exact, Z/X/Y | qdebug |
+|---|---|---|---|---|
+| logic changes caught (440) | 75% | 62% | 94% | 100% |
+| ...of the smallest ones, trace distance < 0.02 (90) | 37% | 46% | 100% | 100% |
+| equivalent edits wrongly failed (317) | 25% | 0% | 0% | 0% |
+
+How to read this honestly:
+
+* **qdebug's 100% is by construction** on circuits this small: it compares output states exactly,
+  which is also how ground truth is defined. The result is what the *other* tests miss.
+* **The naive test cannot be tuned out of it.** At threshold 0.02 it misses 6% of logic changes but
+  fails 89% of harmless edits; at 0.1 it fails none of them but misses 38% of the bugs.
+* **All 28 misses of the Z/X/Y probes are on `bell_rot`**, a circuit built to be uniform in those
+  bases. On the other five circuits the three probes catch everything.
+* **Noise-only edits:** qdebug never calls redundant gates a logic bug (0 of 840 runs) and never
+  flags an unpadded circuit. It reports `NOISE_REGRESSION` for 21% of runs at 16 added CX pairs and
+  83% at 32. The budget is conservative, so small noise increases pass.
+* **A limitation the benchmark exposed:** on `bell_rot`, noise is never detected, even at 32 pairs.
+  Depolarizing noise pushes outputs towards uniform, and that circuit is already uniform in every
+  probed basis. Recording with `--random-bases` adds mixed bases that should see it; that is not
+  yet automatic for small circuits.
+* Local depolarizing noise only. Not yet run on an IonQ noise model.
+
 ---
 
 ## 2. Project layout
@@ -98,6 +130,7 @@ qdebug/
   report.py       console / markdown / json / png
   cli.py          python -m qdebug ...
   demo_suite.py   golden circuits + injected bugs with expected verdicts
+  benchmark.py    random-mutant benchmark vs naive and probe-only tests
 docs/                 interactive browser demo (index.html + qdebug-demo.js, no build step)
 examples/suite.py     example user suite (env-var bug toggles)
 examples/snapshots/   its committed golden snapshots (what CI checks against)
@@ -117,6 +150,7 @@ python -m pytest -q                                     # a few seconds
 python -m pytest -q -m slow                             # 1,020 unchanged-circuit checks, ~35 s
 python -m qdebug doctor --backend local                 # smoke test
 python -m qdebug demo   --backend local --assert-all    # bug-injection demo → demo_out/report.{json,md,png}
+python -m qdebug benchmark                              # 757-mutant benchmark → docs/benchmark/, ~1 min
 ```
 
 Use it on your own circuits (this is the actual regression workflow):

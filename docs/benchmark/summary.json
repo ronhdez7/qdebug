@@ -1,0 +1,226 @@
+{
+  "config": {
+    "backend": {
+      "backend": "local-aer",
+      "noise": "depolarizing",
+      "p1": 0.0005,
+      "p2": 0.005,
+      "readout": 0.0
+    },
+    "per_circuit": 150,
+    "seed": 2026,
+    "pad_seeds": 20,
+    "shots": 1000,
+    "circuits": [
+      "bell",
+      "bell_rot",
+      "ghz4",
+      "qft3",
+      "grover3",
+      "bv"
+    ]
+  },
+  "n_mutants": 757,
+  "n_changed": 440,
+  "n_equivalent": 317,
+  "detection": {
+    "all": {
+      "n": 440,
+      "naive": 0.7454545454545455,
+      "z_only": 0.6204545454545455,
+      "zxy": 0.9363636363636364,
+      "qdebug": 1.0
+    },
+    "< 0.02": {
+      "n": 90,
+      "naive": 0.36666666666666664,
+      "z_only": 0.45555555555555555,
+      "zxy": 1.0,
+      "qdebug": 1.0
+    },
+    "0.02 to 0.2": {
+      "n": 47,
+      "naive": 0.425531914893617,
+      "z_only": 0.425531914893617,
+      "zxy": 1.0,
+      "qdebug": 1.0
+    },
+    "> 0.2": {
+      "n": 303,
+      "naive": 0.9075907590759076,
+      "z_only": 0.6996699669966997,
+      "zxy": 0.9075907590759076,
+      "qdebug": 1.0
+    }
+  },
+  "equivalent": {
+    "n": 317,
+    "naive_flags": 0.24921135646687698,
+    "qdebug_logic_bug": 0.0,
+    "qdebug_noise_regression": 0.0
+  },
+  "naive_thresholds": {
+    "0.02": {
+      "misses_bugs": 0.0613636363636364,
+      "flags_equivalent": 0.8927444794952681
+    },
+    "0.05": {
+      "misses_bugs": 0.2545454545454545,
+      "flags_equivalent": 0.24921135646687698
+    },
+    "0.1": {
+      "misses_bugs": 0.375,
+      "flags_equivalent": 0.0
+    }
+  },
+  "by_operator": {
+    "delete gate": {
+      "n": 53,
+      "changed": 51,
+      "naive": 1.0,
+      "z_only": 0.8235294117647058,
+      "zxy": 1.0,
+      "qdebug": 1.0
+    },
+    "swap control/target": {
+      "n": 12,
+      "changed": 8,
+      "naive": 1.0,
+      "z_only": 0.875,
+      "zxy": 1.0,
+      "qdebug": 1.0
+    },
+    "wrong qubit": {
+      "n": 75,
+      "changed": 69,
+      "naive": 0.9855072463768116,
+      "z_only": 0.8260869565217391,
+      "zxy": 0.9855072463768116,
+      "qdebug": 1.0
+    },
+    "wrong gate": {
+      "n": 43,
+      "changed": 43,
+      "naive": 0.9767441860465116,
+      "z_only": 0.9069767441860465,
+      "zxy": 0.9767441860465116,
+      "qdebug": 1.0
+    },
+    "angle error": {
+      "n": 105,
+      "changed": 67,
+      "naive": 0.3880597014925373,
+      "z_only": 0.47761194029850745,
+      "zxy": 1.0,
+      "qdebug": 1.0
+    },
+    "stray rotation": {
+      "n": 121,
+      "changed": 70,
+      "naive": 0.38571428571428573,
+      "z_only": 0.4142857142857143,
+      "zxy": 1.0,
+      "qdebug": 1.0
+    },
+    "stray Pauli": {
+      "n": 159,
+      "changed": 132,
+      "naive": 0.803030303030303,
+      "z_only": 0.5075757575757576,
+      "zxy": 0.803030303030303,
+      "qdebug": 1.0
+    },
+    "cancelling pair": {
+      "n": 162,
+      "changed": 0,
+      "naive": NaN,
+      "z_only": NaN,
+      "zxy": NaN,
+      "qdebug": NaN
+    },
+    "reorder disjoint gates": {
+      "n": 27,
+      "changed": 0,
+      "naive": NaN,
+      "z_only": NaN,
+      "zxy": NaN,
+      "qdebug": NaN
+    }
+  },
+  "padding": {
+    "0": {
+      "n": 120,
+      "qdebug_noise": 0.0,
+      "qdebug_logic": 0.0,
+      "naive_fail": 0.24166666666666667
+    },
+    "1": {
+      "n": 120,
+      "qdebug_noise": 0.0,
+      "qdebug_logic": 0.0,
+      "naive_fail": 0.2833333333333333
+    },
+    "2": {
+      "n": 120,
+      "qdebug_noise": 0.0,
+      "qdebug_logic": 0.0,
+      "naive_fail": 0.325
+    },
+    "4": {
+      "n": 120,
+      "qdebug_noise": 0.0,
+      "qdebug_logic": 0.0,
+      "naive_fail": 0.35833333333333334
+    },
+    "8": {
+      "n": 120,
+      "qdebug_noise": 0.0,
+      "qdebug_logic": 0.0,
+      "naive_fail": 0.5833333333333334
+    },
+    "16": {
+      "n": 120,
+      "qdebug_noise": 0.20833333333333334,
+      "qdebug_logic": 0.0,
+      "naive_fail": 0.8333333333333334
+    },
+    "32": {
+      "n": 120,
+      "qdebug_noise": 0.8333333333333334,
+      "qdebug_logic": 0.0,
+      "naive_fail": 0.8333333333333334
+    }
+  },
+  "by_circuit": {
+    "bell": {
+      "changed": 29,
+      "zxy_misses": 0,
+      "noise_at_max_padding": 1.0
+    },
+    "bell_rot": {
+      "changed": 58,
+      "zxy_misses": 28,
+      "noise_at_max_padding": 0.0
+    },
+    "ghz4": {
+      "changed": 78,
+      "zxy_misses": 0,
+      "noise_at_max_padding": 1.0
+    },
+    "qft3": {
+      "changed": 72,
+      "zxy_misses": 0,
+      "noise_at_max_padding": 1.0
+    },
+    "grover3": {
+      "changed": 111,
+      "zxy_misses": 0,
+      "noise_at_max_padding": 1.0
+    },
+    "bv": {
+      "changed": 92,
+      "zxy_misses": 0,
+      "noise_at_max_padding": 1.0
+    }
+  }
+}

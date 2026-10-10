@@ -1,4 +1,4 @@
-"""Command line interface:  python -m qdebug <record|check|demo|doctor> ..."""
+"""Command line interface:  python -m qdebug <record|check|demo|benchmark|doctor> ..."""
 from __future__ import annotations
 
 import argparse
@@ -159,6 +159,21 @@ def cmd_demo(a) -> int:
     return 0 if ok == len(reports) or not a.assert_all else 2
 
 
+def cmd_benchmark(a) -> int:
+    """Mutation benchmark: qdebug vs naive and probe-only tests."""
+    from . import benchmark
+    be = _backend(a)
+    _say(f"backend: {be.describe()}")
+    _say(f"generating and checking mutants ({a.per_circuit} per circuit) ...")
+    results = benchmark.run(be, per_circuit=a.per_circuit, seed=a.seed,
+                            pad_seeds=a.pad_seeds, shots=a.shots)
+    summary = benchmark.write(results, a.out)
+    _say()
+    _say(benchmark.to_markdown(results, summary))
+    _say(f"wrote {a.out}/benchmark.md, benchmark.png, summary.json, results.json")
+    return 0
+
+
 def cmd_doctor(a) -> int:
     """Smoke test: connectivity, bit ordering, ideal-vs-noisy sanity."""
     from .circuits import probes
@@ -208,6 +223,16 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("-v", "--verbose", action="store_true")
     _add_common(p)
     p.set_defaults(fn=cmd_demo)
+
+    p = sub.add_parser("benchmark",
+                       help="random-mutant benchmark against naive and probe-only tests")
+    p.add_argument("--out", default="docs/benchmark")
+    p.add_argument("--per-circuit", type=int, default=150, help="mutants per circuit")
+    p.add_argument("--seed", type=int, default=2026)
+    p.add_argument("--pad-seeds", type=int, default=20,
+                   help="noisy runs per padding level in the noise-only sweep")
+    _add_common(p)
+    p.set_defaults(fn=cmd_benchmark)
 
     p = sub.add_parser("doctor", help="connectivity + bit-order smoke test")
     _add_common(p)
