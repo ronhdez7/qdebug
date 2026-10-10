@@ -9,6 +9,42 @@ Project for the **Qollab x IonQ Quantum Hackathon** (<https://qollab.xyz/program
 | Team size | solo or up to 4 |
 | Judging | local node panel first, top projects advance to a global panel; same rubric everywhere |
 | Roadmap written | Oct 9, 2026, against commit `3364591` |
+| Theme | **Quantum Unlocked** (decided Oct 9) |
+
+---
+
+## 0. Status after the Oct 9 session
+
+| Stage | Status |
+|---|---|
+| 0. Honest and forkable | **Done.** MIT license was picked as a default; change it if you prefer another. |
+| 1. Live IonQ validation | **Not started. Needs the API key.** Opt-in tests are ready (`pytest -m ionq`). |
+| 2. Correctness holes | **Done.** |
+| 3. CI story | **Written, not yet run on GitHub** (nothing is pushed). |
+| 4. Better noise analysis | Not started (stretch). |
+| 5. Interactive demo | **First version done** (`docs/index.html`), checked in a headless browser. |
+| 6. Submission | Not started. |
+
+Verified at the end of the session: default suite 58 passed, slow test passed (1,020 checks, no
+false alarms), demo 12/12 on the local backend.
+
+### Handoff: what to do next, in order
+
+1. **Push** `main` and check that both GitHub workflows go green. Open a throwaway PR that sets the
+   `cx_flip` bug in `examples/suite.py` to see the `qdebug check` job fail and comment.
+2. **Stage 1** with the IonQ key:
+   ```bash
+   export IONQ_API_KEY=...
+   python -m qdebug doctor --backend ionq
+   python -m pytest -m ionq -v
+   python -m qdebug demo --backend ionq --noise-model forte-1 --seeds 2 -v
+   ```
+   Expect `ghz4_cx_padding` to be the risky row (IonQ may cancel the redundant CX pairs). Then put
+   the real table in the README and fix the fake provider if the real API behaved differently.
+3. **Read the rubric and deliverables** behind the Qollab login and adjust Stage 6.
+4. **Demo polish (Stage 5):** enable GitHub Pages on `/docs` so the demo has a public URL, add the
+   repo link to the page footer, and have someone without a quantum background try it.
+5. **Stage 6**, with the feature freeze at Oct 11, 15:00 ET.
 
 ---
 
@@ -19,6 +55,9 @@ change in output is a **logic bug** or **just noise**. It records a golden snaps
 (exact ideal distribution in Z/X/Y probe bases + a seeded noise baseline), then classifies an
 edited circuit as `PASS`, `REFACTOR_OK`, `LOGIC_BUG` or `NOISE_REGRESSION`, and blames the
 specific edit (diff hunk) that moved the ideal output.
+
+> This section describes the repo as audited at `3364591`, before the Oct 9 work. Section 0 has the
+> current status; gaps closed since then are marked.
 
 ### Verified on Oct 9 (fresh venv, Python 3.14, qiskit 2.5.2, qiskit-aer 0.17.2, qiskit-ionq 1.1.1)
 
@@ -49,25 +88,27 @@ These were found by reading the code against the README. Each is picked up in a 
 1. **Never run against live IonQ.** No API key was available. Bit ordering, probability key
    format, job shapes and server-side compilation are all assumptions until `doctor --backend ionq`
    passes for real.
-2. **No LICENSE file.** The hackathon asks for open-source projects; without a license the repo
+2. *(closed)* **No LICENSE file.** The hackathon asks for open-source projects; without a license the repo
    is not legally forkable.
-3. **Logic check is state-based, not unitary-based.** Everything runs from `|0...0>`. A bug in a
+3. *(closed: unitary comparison up to 10 qubits; warning by default, failure with
+   `--equivalence unitary`)* **Logic check is state-based, not unitary-based.** Everything runs from `|0...0>`. A bug in a
    gate that the input state never exercises (e.g. a wrong angle on a controlled gate whose control
    is `|0>`) is reported as `REFACTOR_OK`. The `qft3` comment in `demo_suite.py` acknowledges this.
-4. **Probe bases are uniform.** All qubits are measured in the same basis (all-Z, all-X, all-Y).
+4. *(closed: exact statevector comparison up to 20 qubits, random mixed bases above)*
+   **Probe bases are uniform.** All qubits are measured in the same basis (all-Z, all-X, all-Y).
    That is not tomographically complete: a change that only shows up in mixed-basis correlations
    (e.g. `<X⊗Z>`) can slip through.
-5. **README overstates one test claim.** It says "1,000 repeated checks of unchanged circuits";
+5. *(closed: the slow test now runs 1,020)* **README overstates one test claim.** It says "1,000 repeated checks of unchanged circuits";
    the test suite runs 5 circuits x 12 seeds = 60.
-6. **`snapshots/` is gitignored, but the README tells users to commit `snapshots/*.json`.**
-7. **Default probe bases disagree.** `record()` defaults to `("Z", "X")`; the CLI and README say
+6. *(closed)* **`snapshots/` is gitignored, but the README tells users to commit `snapshots/*.json`.**
+7. *(closed)* **Default probe bases disagree.** `record()` defaults to `("Z", "X")`; the CLI and README say
    Z, X, Y.
 8. **Noise budget is a heuristic.** Hardware noise is scaled by a gate-count cost ratio with
    hand-picked weights. Not calibrated against any IonQ noise model.
-9. **No CI.** Nothing runs the tests on push.
+9. *(closed, pending first push)* **No CI.** Nothing runs the tests on push.
 10. **Scaling limits.** Exact local simulation caps at 24 qubits; blame is skipped above 12 hunks;
     mid-circuit measurement, classical control and parameterized circuits are unsupported.
-11. `stats.hellinger_fidelity` is unused.
+11. *(closed)* `stats.hellinger_fidelity` is unused.
 
 ---
 
@@ -84,7 +125,7 @@ For the hackathon, "done" means a judge can do all of this in under five minutes
 3. Understand from one picture why a naive shot-based test gets it wrong and qdebug gets it right.
 4. Fork it and point it at their own circuits.
 
-### Open decision for the developers: which theme?
+### Theme (decided: Quantum Unlocked)
 
 The hackathon has three themes. Projects that fit none are still eligible for placement and local
 awards, but not for theme specialty awards.

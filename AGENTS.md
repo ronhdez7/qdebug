@@ -56,17 +56,21 @@ work, and push.
 python -m venv .venv && source .venv/bin/activate     # Python 3.10+
 pip install -r requirements.txt                        # or: pip install -e ".[all]"
 
-python -m pytest -q                                    # full suite, about 70 s
+python -m pytest -q                                    # default suite, about 10 s
+python -m pytest -q -m slow                            # 1,020 false-alarm checks, about 35 s
 python -m qdebug doctor --backend local                # smoke test
-python -m qdebug demo --backend local --assert-all     # must print 10/10 (or N/N) and exit 0
+python -m qdebug demo --backend local --assert-all     # must print N/N and exit 0
 
 # only with a developer-provided key:
 python -m qdebug doctor --backend ionq
 python -m qdebug demo --backend ionq --noise-model forte-1 --seeds 2
+python -m pytest -m ionq -v                            # live checks; skipped without a key
 ```
 
-Baseline at commit `3364591`: 35 tests pass, demo is 10/10 on the local backend. If your starting
-point is worse than that, report it before changing anything.
+Baseline after the Oct 9 session: 58 tests pass in the default suite (5 more are deselected: 1
+`slow`, 4 `ionq`), the slow test passes, and the demo is 12/12 on the local backend. If your
+starting point is worse than that, report it before changing anything. `tests/test_web_demo.py`
+needs Node.js and is skipped without it.
 
 ## Code map
 
@@ -76,14 +80,18 @@ qdebug/
   circuits.py     measurement stripping, probe bases, instruction signatures, QPY (de)serialisation
   backends.py     Backend ABC; LocalBackend, IonQBackend, QiskitBackendAdapter; make_backend()
   snapshot.py     record(), save(), load(); Snapshot and NoiseBaseline
+  equiv.py        exact statevector / unitary distances, global phase removed
   diff.py         difflib over signatures -> hunks; build_hybrid() for blame
   checker.py      check(), Verdict, CheckConfig, Report, noise_budget()
   report.py       console / Markdown / JSON / PNG
   cli.py          record, check, demo, doctor
   demo_suite.py   golden circuits + mutants with expected verdicts
-examples/suite.py   example user suite
+docs/               browser demo: index.html (UI) + qdebug-demo.js (engine, mirrors the package)
+examples/           example user suite + its committed snapshots (used by the PR workflow)
 notebooks/          quickstart notebook
-tests/              pytest; test_ionq_adapter.py uses a fake qiskit-ionq provider
+tests/              pytest; test_ionq_adapter.py uses a fake qiskit-ionq provider,
+                    test_ionq_live.py is opt-in, test_web_demo.py checks the JS engine
+.github/workflows/  tests.yml (pytest + demo), qdebug-check.yml (example PR gate)
 ```
 
 ## Invariants: do not break these
@@ -106,6 +114,10 @@ tests/              pytest; test_ionq_adapter.py uses a fake qiskit-ionq provide
 - **Unsupported circuits fail loudly.** Mid-circuit measurement and classical control raise a clear
   `ValueError`; never strip them silently.
 - **Snapshot format changes bump `SNAPSHOT_VERSION`** and handle old files deliberately.
+- **`transpile()` always gets `num_processes=1`.** The default process pool is slow for tiny batches
+  and breaks callers without a `__main__` guard on Python 3.14.
+- **The browser demo mirrors the package.** If you change the verdict rules, the noise budget or
+  the probe bases in Python, change `docs/qdebug-demo.js` to match and keep `test_web_demo.py` green.
 - **`demo_suite.mutants()` is the accuracy benchmark.** New capability means new mutants with
   expected verdicts, added in the same commit.
 

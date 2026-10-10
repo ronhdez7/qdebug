@@ -11,6 +11,10 @@ IonQ cloud simulator) and judging the two kinds of deviation separately.
 | `LOGIC_BUG` | The **ideal (noise-free)** output distribution changed. Reports *which edit* did it |
 | `NOISE_REGRESSION` | Logic unchanged, but the change made the circuit noticeably noisier (e.g. +80 CX) |
 
+**Try the idea in a browser, nothing to install:** open [`docs/index.html`](docs/index.html). It is an
+interactive walk through seven situations (harmless refactor, phase bug, a bug smaller than shot
+noise, a change that is only noisier, ...) showing the ideal view and the noisy view side by side.
+
 ---
 
 ## 1. How it works
@@ -90,6 +94,7 @@ qdebug/
   report.py       console / markdown / json / png
   cli.py          python -m qdebug ...
   demo_suite.py   golden circuits + injected bugs with expected verdicts
+docs/                 interactive browser demo (index.html + qdebug-demo.js, no build step)
 examples/suite.py     example user suite (env-var bug toggles)
 examples/snapshots/   its committed golden snapshots (what CI checks against)
 notebooks/qdebug_quickstart.ipynb
@@ -196,6 +201,9 @@ be = QiskitBackendAdapter(platform_backend)      # noisy counts from it, exact i
   `qdebug doctor --backend ionq` first; it is designed to expose bit-order or API surprises immediately.
   `IONQ_API_KEY=... python -m pytest -m ionq -v` then checks the assumptions the fake provider encodes.
 * **The pull-request workflow has not run on GitHub yet** (nothing has been pushed).
+* **The browser demo is a teaching aid, not the tool.** It re-implements the method in JavaScript for
+  three small circuits with depolarizing noise. `tests/test_web_demo.py` checks it against Qiskit
+  (ideal, to 1e-12), Qiskit Aer (noisy, to 1e-9) and the Python verdicts; that test needs Node.js.
 * **Exact equivalence is a small-circuit feature**: statevectors up to 20 qubits, unitaries up to 10.
   Above that, "behaviour identical" rests on the probe bases (a warning says so); 4 random mixed bases
   are added automatically when recording circuits that wide.
