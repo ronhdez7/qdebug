@@ -67,7 +67,7 @@ python -m qdebug demo --backend ionq --noise-model forte-1 --seeds 2
 python -m pytest -m ionq -v                            # live checks; skipped without a key
 ```
 
-Baseline after the Oct 9 session: 70 tests pass in the default suite (5 more are deselected: 1
+Baseline after the Oct 9 session: 73 tests pass in the default suite (5 more are deselected: 1
 `slow`, 4 `ionq`), the slow test passes, and the demo is 12/12 on the local backend. If your
 starting point is worse than that, report it before changing anything. `tests/test_web_demo.py`
 needs Node.js and is skipped without it.

@@ -22,10 +22,11 @@ Project for the **Qollab x IonQ Quantum Hackathon** (<https://qollab.xyz/program
 | 2. Correctness holes | **Done.** |
 | 3. CI story | **Written, not yet run on GitHub** (nothing is pushed). |
 | 4. Better noise analysis | **Done locally.** Native-gate mode and calibration still need a live IonQ run. |
-| 5. Interactive demo | **First version done** (`docs/index.html`), checked in a headless browser. |
+| 5. Interactive demo | **Done**: guided lesson, challenge mode, sandbox with a circuit builder (`docs/index.html`), checked in a headless browser. Still to add: recorded IonQ noise (needs the key). |
+| Benchmark | **Done**: 757 random mutants, results in `docs/benchmark/` and the README. Local noise only. |
 | 6. Submission | Not started. |
 
-Verified at the end of the session: default suite 70 passed, slow test passed (1,020 checks, no
+Verified at the end of the session: default suite 73 passed, slow test passed (1,020 checks, no
 false alarms), demo 12/12 on the local backend.
 
 ### Handoff: what to do next, in order
@@ -50,7 +51,10 @@ false alarms), demo 12/12 on the local backend.
    API behaved differently.
 3. **Read the rubric and deliverables** behind the Qollab login and adjust Stage 6.
 4. **Demo polish (Stage 5):** enable GitHub Pages on `/docs` so the demo has a public URL, add the
-   repo link to the page footer, and have someone without a quantum background try it.
+   repo link to the page footer, and have someone without a quantum background go through the
+   lesson. Once the key works, record `forte-1` / `aria-1` runs for the demo circuits and add a
+   "toy noise / IonQ noise model" toggle, and rerun `python -m qdebug benchmark --backend ionq`
+   on a smaller `--per-circuit` to get benchmark numbers under IonQ's noise.
 5. **Stage 6**, with the feature freeze at Oct 11, 15:00 ET.
 
 ---
