@@ -29,6 +29,12 @@ from .stats import Dist, clean_probs, normalize_key
 MAX_LOCAL_QUBITS = 24
 
 
+# Every transpile() call passes num_processes=1. Batches here are a handful of
+# tiny circuits, and qiskit's default process pool costs far more than it saves;
+# on Python 3.14 (forkserver start method) it also re-imports the caller's
+# __main__, which breaks scripts and notebooks without a __main__ guard.
+
+
 def _as_list(x, n: int) -> list:
     """qiskit returns a dict for 1 circuit and a list for many; normalise."""
     if isinstance(x, (list, tuple)):
@@ -105,7 +111,8 @@ class LocalBackend(Backend):
         # optimization_level=0 keeps the circuit's structure: a CX-CX pair that
         # is logically a no-op must still cost noise (that's what we test for).
         tcs = transpile(circuits, basis_gates=["rz", "sx", "x", "cx"],
-                        optimization_level=0, seed_transpiler=seed)
+                        optimization_level=0, seed_transpiler=seed,
+                        num_processes=1)
         res = sim.run(tcs, shots=shots, seed_simulator=seed).result()
         return [{normalize_key(k): v for k, v in res.get_counts(i).items()}
                 for i in range(len(circuits))]
@@ -159,7 +166,7 @@ class IonQBackend(Backend):
             with warnings.catch_warnings():
                 warnings.simplefilter("ignore")
                 return transpile(circuits, basis_gates=list(ionq_basis_gates),
-                                 optimization_level=0)
+                                 optimization_level=0, num_processes=1)
         except Exception:  # fall back to submitting circuits as-is
             return circuits
 
@@ -191,7 +198,8 @@ class QiskitBackendAdapter(Backend):
         return [exact_probs(c) for c in circuits]
 
     def noisy_counts(self, circuits, shots, seed):
-        tcs = transpile(circuits, self.backend, optimization_level=0)
+        tcs = transpile(circuits, self.backend, optimization_level=0,
+                        num_processes=1)
         try:
             job = self.backend.run(tcs, shots=shots, seed_simulator=seed)
         except TypeError:
