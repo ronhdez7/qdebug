@@ -88,7 +88,9 @@ qdebug/
   cli.py          record, check, demo, doctor
   demo_suite.py   golden circuits + mutants with expected verdicts
   benchmark.py    random-mutant benchmark; results committed under docs/benchmark/
-docs/               browser demo: index.html (UI) + qdebug-demo.js (engine, mirrors the package)
+docs/               browser demo, no build step: index.html, qdebug-demo.js (engine, mirrors the
+                    package), app.js (state, charts, circuit diagrams), one file per mode
+                    (lesson.js, ...); docs/benchmark/ holds the committed benchmark results
 examples/           example user suite + its committed snapshots (used by the PR workflow)
 notebooks/          quickstart notebook
 tests/              pytest; test_ionq_adapter.py uses a fake qiskit-ionq provider,

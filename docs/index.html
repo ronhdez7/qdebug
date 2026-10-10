@@ -91,6 +91,43 @@
   .tag { font-size: 12px; color: var(--text-muted); }
   [hidden] { display: none !important; }
 
+  .tabs { display: flex; gap: 8px; margin: 18px 0 0; flex-wrap: wrap; }
+  .tab { background: transparent; border: 1px solid var(--border); border-radius: 8px; padding: 8px 16px;
+    cursor: pointer; font-weight: 600; color: var(--text-secondary); }
+  .tab:hover { border-color: var(--accent); }
+  .tab[aria-pressed="true"] { background: var(--surface-1); color: var(--text-primary);
+    border-color: var(--accent); box-shadow: inset 0 0 0 1px var(--accent); }
+  .lesson { border-left: 3px solid var(--accent); }
+  h2.big { font-size: 22px; line-height: 1.2; margin: 2px 0 8px; }
+  .lesson p { max-width: 78ch; }
+  .try { background: var(--page); border-radius: 8px; padding: 10px 12px; }
+  .nav { justify-content: space-between; margin-top: 6px; }
+  .btn.primary { background: var(--accent); border-color: var(--accent); color: var(--surface-1); font-weight: 600; }
+  .btn:disabled { opacity: 0.4; cursor: default; }
+  .dots { display: flex; gap: 6px; }
+  .dots i { width: 8px; height: 8px; border-radius: 50%; background: var(--track); }
+  .dots i.on { background: var(--accent); }
+
+  .circrow { display: flex; align-items: center; gap: 10px; margin-top: 6px; }
+  .circrow .label { width: 56px; margin: 0; flex: none; }
+  .circwrap { overflow-x: auto; flex: 1; min-width: 0; padding-bottom: 2px; }
+  svg.circuit { display: block; }
+  svg.circuit .wire, svg.circuit .link { stroke: var(--text-muted); stroke-width: 1.5; }
+  svg.circuit .wire-label { fill: var(--text-muted); font-size: 11px; font-family: ui-monospace, Menlo, Consolas, monospace; }
+  svg.circuit .box { fill: var(--surface-1); stroke: var(--text-secondary); stroke-width: 1.5; }
+  svg.circuit .glabel { fill: var(--text-primary); font-size: 12px; font-weight: 600; font-family: system-ui, sans-serif; }
+  svg.circuit .ctl { fill: var(--text-secondary); }
+  svg.circuit .tgt { fill: var(--surface-1); stroke: var(--text-secondary); stroke-width: 1.5; }
+  svg.circuit .run { fill: var(--text-secondary); font-size: 10px; font-family: ui-monospace, Menlo, Consolas, monospace; }
+  svg.circuit .add .box, svg.circuit .add .tgt { fill: var(--add-bg); stroke: var(--good); stroke-width: 2; }
+  svg.circuit .add .link { stroke: var(--good); stroke-width: 2; }
+  svg.circuit .add .ctl { fill: var(--good); }
+  svg.circuit .del .box, svg.circuit .del .tgt { fill: var(--del-bg); stroke: var(--critical); stroke-width: 2; stroke-dasharray: 3 2; }
+  svg.circuit .del .link { stroke: var(--critical); stroke-width: 2; }
+  svg.circuit .del .ctl { fill: var(--critical); }
+  svg.circuit .click { cursor: pointer; }
+  svg.circuit .click:hover .box, svg.circuit .click:hover .tgt { stroke: var(--accent); }
+
   .verdict { display: flex; gap: 12px; align-items: flex-start; }
   .badge {
     display: inline-flex; align-items: center; gap: 8px; white-space: nowrap;
@@ -152,13 +189,17 @@
     hardware simply noisier now? A normal test cannot tell, because every quantum measurement is random and
     every real device is noisy. This page shows how to separate the two by looking at the same circuit twice.</p>
 
-  <div class="card">
-    <h2>Start here: pick a situation</h2>
+  <nav class="tabs" id="modes" aria-label="Mode"></nav>
+
+  <section class="card lesson" id="lessonCard" data-modes="lesson"></section>
+
+  <div class="card" data-modes="sandbox">
+    <h2>Quick situations</h2>
     <p class="muted">Each button edits the circuit in one specific way. Watch which of the two views below moves.</p>
     <div class="steps" id="scenarios"></div>
   </div>
 
-  <div class="grid2">
+  <div class="grid2" id="verdictRow">
     <div class="card">
       <div class="label">qdebug says</div>
       <div class="verdict"><span class="badge" id="verdict"></span></div>
@@ -171,9 +212,18 @@
     </div>
   </div>
 
-  <div class="card notice" id="noticeCard">
+  <div data-modes="sandbox"><div class="card notice" id="noticeCard">
     <h2>What to notice</h2>
     <ul id="notice"></ul>
+  </div></div>
+
+  <div class="card">
+    <h2>The circuits</h2>
+    <p class="muted">Time runs left to right; q0 is the top wire. The edit is highlighted.
+      <span id="circHint" hidden>Click a gate in the edited circuit to remove it.</span></p>
+    <div class="circrow"><div class="label">Golden</div><div class="circwrap" id="circGolden"></div></div>
+    <div class="circrow"><div class="label">Edited</div><div class="circwrap" id="circEdited"></div></div>
+    <details><summary>Show the edit as a gate list</summary><pre class="diff mono" id="diff"></pre></details>
   </div>
 
   <div class="card">
@@ -210,11 +260,12 @@
     </details>
   </div>
 
-  <div class="grid2">
+  <div class="grid2" id="controlsRow">
     <div class="card controls" style="grid-template-columns:1fr">
       <h2>Edit the circuit yourself</h2>
       <div class="row"><label for="circuit">Golden circuit</label>
         <select id="circuit"></select></div>
+      <div id="presetEdits">
       <div class="row"><input type="checkbox" id="cxFlip"><label for="cxFlip">Swap control and target of the first CX <span class="tag">logic bug</span></label></div>
       <div class="row"><input type="checkbox" id="strayZ"><label for="strayZ">Add a stray Z before readout <span class="tag">phase bug</span></label></div>
       <div class="row" id="sdgRow"><input type="checkbox" id="sdg"><label for="sdg">Replace S with S† <span class="tag">hidden from Z, X and Y</span></label></div>
@@ -223,7 +274,7 @@
         <input type="range" id="drift" min="0" max="0.5" step="0.01"><output id="driftOut"></output></div>
       <div class="row"><label for="pad">Redundant CX·CX pairs <span class="tag">noise only</span></label>
         <input type="range" id="pad" min="0" max="40" step="1"><output id="padOut"></output></div>
-      <pre class="diff mono" id="diff"></pre>
+      </div>
     </div>
     <div class="card controls" style="grid-template-columns:1fr">
       <h2>Change how you look</h2>
@@ -250,263 +301,7 @@
 <div id="tip" hidden></div>
 
 <script src="qdebug-demo.js"></script>
-<script>
-(function () {
-  "use strict";
-  const Q = window.QDebugDemo;
-  const $ = (id) => document.getElementById(id);
-  const SVG = "http://www.w3.org/2000/svg";
-
-  const SCENARIOS = [
-    { id: "same", label: "Nothing changed", set: { circuit: "ghz3" } },
-    { id: "refactor", label: "Harmless refactor", set: { circuit: "ghz3", hh: true } },
-    { id: "bug", label: "Obvious bug", set: { circuit: "ghz3", cxFlip: true } },
-    { id: "phase", label: "Phase bug", set: { circuit: "ghz3", strayZ: true, viewBasis: "Z" } },
-    { id: "tiny", label: "Bug smaller than shot noise", set: { circuit: "bell", drift: 0.05, viewBasis: "X" } },
-    { id: "noise", label: "Only noisier", set: { circuit: "ghz3", pad: 40 } },
-    { id: "hidden", label: "Hidden from Z, X and Y", set: { circuit: "bell_rot", sdg: true, viewBasis: "X" } },
-  ];
-  const BLANK = { circuit: "ghz3", cxFlip: false, strayZ: false, sdg: false, hh: false, drift: 0, pad: 0,
-                  shots: 1000, p2: 0.005, zOnly: false, exact: true, seed: 7777, viewBasis: "Z", scenario: "same" };
-  let state = Object.assign({}, BLANK);
-
-  const VERDICTS = {
-    PASS: ["good", "✓", "PASS"],
-    REFACTOR_OK: ["neutral", "✓", "REFACTOR OK"],
-    LOGIC_BUG: ["critical", "✕", "LOGIC BUG"],
-    NOISE_REGRESSION: ["warning", "!", "NOISE REGRESSION"],
-  };
-
-  function badge(el, [cls, icon, text]) {
-    el.className = "badge " + cls;
-    el.innerHTML = `<span class="dot" aria-hidden="true">${icon}</span>${text}`;
-  }
-
-  // ---------------------------------------------------------------- compute
-  let snapCache = { key: null, snap: null };
-  function compute() {
-    const n = Q.CIRCUITS[state.circuit].n;
-    const bases = state.zOnly ? ["Z"] : ["Z", "X", "Y"];
-    const opts = { bases, shots: state.shots, p2: state.p2, exactCheck: state.exact, seed: state.seed };
-    const key = [state.circuit, bases.join(""), state.shots, state.p2].join("|");
-    if (snapCache.key !== key) {
-      snapCache = { key, snap: Q.record(n, Q.build(state.circuit, {}), opts) };
-    }
-    const mod = Q.build(state.circuit, state);
-    return { n, bases, snap: snapCache.snap, mod, r: Q.check(mod, snapCache.snap, opts) };
-  }
-
-  // ----------------------------------------------------------------- charts
-  function el(name, attrs, parent) {
-    const e = document.createElementNS(SVG, name);
-    for (const k in attrs) e.setAttribute(k, attrs[k]);
-    if (parent) parent.appendChild(e);
-    return e;
-  }
-
-  // Grouped columns: one group per bitstring, two series, shared 0..1 axis.
-  function drawChart(host, labels, series, top) {
-    const W = 480, H = 210, L = 38, Rm = 6, T = 8, B = 26;
-    const pw = W - L - Rm, ph = H - T - B, k = labels.length, band = pw / k;
-    const bw = Math.min(24, Math.max(4, (band - 10) / 2 - 1));
-    const y = (v) => T + ph - (v / top) * ph;
-    host.innerHTML = "";
-    const svg = el("svg", { viewBox: `0 0 ${W} ${H}`, class: "chart", role: "img",
-      "aria-label": series.map((s) => s.name).join(" versus ") + ", probability of each measured bitstring" }, host);
-    for (const g of [0, top / 2, top]) {
-      el("line", { x1: L, x2: W - Rm, y1: y(g), y2: y(g), stroke: "var(--grid)", "stroke-width": 1 }, svg);
-      el("text", { x: L - 6, y: y(g) + 4, "text-anchor": "end" }, svg).textContent = String(g);
-    }
-    labels.forEach((lab, i) => {
-      const cx = L + band * (i + 0.5);
-      const glow = el("rect", { x: L + band * i, y: T, width: band, height: ph, class: "glow" }, svg);
-      series.forEach((s, j) => {
-        const v = s.values[i], x = cx + (j === 0 ? -bw - 1 : 1), h = Math.max(0, (v / top) * ph);
-        if (h < 0.5) return;
-        const r = Math.min(4, h, bw / 2), y0 = T + ph, y1 = y0 - h;
-        el("path", { fill: s.color, d: `M${x},${y0}V${y1 + r}Q${x},${y1} ${x + r},${y1}H${x + bw - r}` +
-          `Q${x + bw},${y1} ${x + bw},${y1 + r}V${y0}Z` }, svg);
-      });
-      if (k <= 8 || i % 2 === 0) el("text", { x: cx, y: H - 8, "text-anchor": "middle" }, svg).textContent = lab;
-      const hit = el("rect", { x: L + band * i, y: T, width: band, height: ph, class: "band", tabindex: 0 }, svg);
-      const show = (ev) => { glow.classList.add("on"); showTip(ev, lab, series, i, hit); };
-      const hide = () => { glow.classList.remove("on"); hideTip(); };
-      hit.addEventListener("pointermove", show);
-      hit.addEventListener("focus", show);
-      hit.addEventListener("pointerleave", hide);
-      hit.addEventListener("blur", hide);
-    });
-  }
-
-  function showTip(ev, lab, series, i, hit) {
-    const tip = $("tip");
-    tip.innerHTML = `<strong class="mono">|${lab}⟩</strong>` + series.map((s) =>
-      `<div><span><i style="background:${s.color}"></i>${s.name}</span><b>${s.values[i].toFixed(4)}</b></div>`).join("");
-    tip.hidden = false;
-    const box = hit.getBoundingClientRect();
-    const x = ev.clientX || box.left + box.width / 2, yv = ev.clientY || box.top;
-    const w = tip.offsetWidth, hgt = tip.offsetHeight;
-    tip.style.left = Math.max(8, Math.min(window.innerWidth - w - 8, x + 14)) + "px";
-    tip.style.top = Math.max(8, yv - hgt - 12) + "px";
-  }
-  function hideTip() { $("tip").hidden = true; }
-
-  // ------------------------------------------------------------------ render
-  function notices(c) {
-    const { r, bases } = c, out = [];
-    const edited = r.edited;
-    if (!edited) {
-      out.push("The noisy bars never match the exact ones perfectly, even with no change at all. " +
-               "That gap is the baseline every test has to live with. Press “Run the shots again” and watch it wobble.");
-    }
-    if (r.verdict === "REFACTOR_OK") {
-      out.push("The gate list changed but the ideal view did not move at all. The edit is provably harmless, " +
-               "so there is nothing to investigate.");
-    }
-    if (r.verdict === "LOGIC_BUG" && !r.hiddenBug && r.perBasis.Z < 1e-9) {
-      out.push("In the Z basis the two exact distributions are identical. Switch the chart to X: the bug is only " +
-               "visible there. Phase errors hide from the standard measurement.");
-    }
-    if (r.verdict === "LOGIC_BUG" && !r.naiveFails) {
-      out.push(`The naive test passed this bug. The change (${Q.fmt(r.logicDev)}) is smaller than the wobble from ` +
-               `${state.shots.toLocaleString()} shots, so sampling can never see it. The ideal view has no sampling, so it does.`);
-    }
-    if (r.verdict === "LOGIC_BUG" && r.naiveFails) {
-      out.push("Both tests fail here, but only the ideal view tells you why: the exact output moved, so it cannot be noise.");
-    }
-    if (r.hiddenBug) {
-      out.push("Look at Z, X and Y in turn: all flat, all identical to the golden circuit. The two states are in fact " +
-               "completely different, but only in how one qubit's X relates to the other's Z. Comparing the exact states catches it.");
-    }
-    if (r.verdict === "NOISE_REGRESSION") {
-      out.push("The ideal view is unchanged: the extra gates cancel out exactly. The noisy view has drifted far from it. " +
-               (r.naiveFails ? "The naive test reports a failure too, but it cannot tell you the logic is fine." : ""));
-    }
-    if (r.verdict === "REFACTOR_OK" && state.zOnly && !state.exact && (state.strayZ || state.drift || state.sdg)) {
-      out.push("This edit does change the circuit, and it passed. With Z-only probing and no exact state check, " +
-               "the test is blind to it. Turn either one back on.");
-    } else if (r.verdict === "REFACTOR_OK" && !state.exact && state.sdg) {
-      out.push("S became S† and nothing flagged it: Z, X and Y all look the same. Turn the exact state comparison back on.");
-    }
-    if (state.p2 === 0 && edited && state.pad > 0) {
-      out.push("With the gate error at zero, redundant gates cost nothing and the noisy view is pure shot noise.");
-    }
-    return out;
-  }
-
-  function render() {
-    const c = compute(), { r, snap, bases, n } = c;
-    if (!bases.includes(state.viewBasis)) state.viewBasis = "Z";
-    const bi = bases.indexOf(state.viewBasis), labels = Q.bitLabels(n);
-
-    badge($("verdict"), VERDICTS[r.verdict]);
-    $("reason").textContent = r.reason;
-    badge($("naive"), r.naiveFails ? ["critical", "✕", "FAIL"] : ["good", "✓", "ok"]);
-    $("naiveReason").textContent =
-      `It compares the noisy shots with the golden output and fails above ${r.naiveThreshold}. ` +
-      `Measured distance: ${r.naiveDev.toFixed(3)}. ` +
-      (r.naiveFails ? "It cannot say whether that is a bug or noise." : "It cannot see anything smaller than its threshold.");
-
-    const ul = $("notice");
-    ul.innerHTML = "";
-    const items = notices(c);
-    items.forEach((t) => { const li = document.createElement("li"); li.textContent = t; ul.appendChild(li); });
-    $("noticeCard").hidden = items.length === 0;
-
-    // one scale for both charts, so bar heights compare across the two views
-    const peak = Math.max(...snap.ideal[bi], ...r.idealMod[bi], ...r.sampled[bi]);
-    const top = peak > 0.5 ? 1 : peak > 0.25 ? 0.5 : 0.25;
-    drawChart($("chartIdeal"), labels, [
-      { name: "Golden, exact", color: "var(--series-1)", values: snap.ideal[bi] },
-      { name: "Edited, exact", color: "var(--series-2)", values: r.idealMod[bi] }], top);
-    drawChart($("chartNoisy"), labels, [
-      { name: "Edited, exact", color: "var(--series-2)", values: r.idealMod[bi] },
-      { name: "Edited, noisy shots", color: "var(--series-3)", values: r.sampled[bi] }], top);
-
-    $("idealStats").innerHTML = bases.map((b) => `<span>${b} basis: <b>${Q.fmt(r.perBasis[b])}</b></span>`).join("") +
-      (r.stateDist === null ? "" : `<span>exact states: <b>${Q.fmt(r.stateDist < 1e-12 ? 0 : r.stateDist)}</b></span>`) +
-      `<span>tolerance: <b>1e-9</b></span>`;
-    const scale = Math.max(r.budget * 2, r.noiseDev * 1.1);
-    $("meter").querySelector(".fill").style.width = (100 * r.noiseDev / scale) + "%";
-    $("meter").querySelector(".mark").style.left = (100 * r.budget / scale) + "%";
-    $("meter").setAttribute("aria-label",
-      `Noise deviation ${r.noiseDev.toFixed(3)} against a budget of ${r.budget.toFixed(3)}`);
-    $("noisyStats").innerHTML = `<span>noise deviation: <b>${r.noiseDev.toFixed(3)}</b></span>` +
-      `<span>budget: <b>${r.budget.toFixed(3)}</b></span>` +
-      `<span>shot noise alone: <b>${snap.shotMean.toFixed(3)}</b></span>` +
-      `<span>noise cost: <b>${r.ratio.toFixed(1)}x</b> golden</span>`;
-
-    $("table").innerHTML = `<table><thead><tr><th>${state.viewBasis} basis</th><th>Golden, exact</th>` +
-      `<th>Edited, exact</th><th>Edited, noisy shots</th></tr></thead><tbody>` +
-      labels.map((l, i) => `<tr><td class="mono">${l}</td><td>${snap.ideal[bi][i].toFixed(4)}</td>` +
-        `<td>${r.idealMod[bi][i].toFixed(4)}</td><td>${r.sampled[bi][i].toFixed(4)}</td></tr>`).join("") +
-      `</tbody></table>`;
-
-    // gate diff, with runs of identical lines collapsed
-    const lines = Q.diff(snap.golden, c.mod), outLines = [];
-    for (let i = 0; i < lines.length;) {
-      let j = i;
-      while (j < lines.length && lines[j].op === lines[i].op && lines[j].text === lines[i].text) j++;
-      outLines.push({ op: lines[i].op, text: lines[i].text + (j - i > 1 ? `   (x${j - i})` : "") });
-      i = j;
-    }
-    $("diff").innerHTML = outLines.map((d) =>
-      `<span class="${d.op === "-" ? "del" : d.op === "+" ? "add" : ""}">${d.op} ${d.text}</span>`).join("");
-
-    // controls reflect state
-    for (const id of ["cxFlip", "strayZ", "sdg", "hh", "zOnly", "exact"]) $(id).checked = !!state[id];
-    for (const id of ["drift", "pad", "shots", "p2"]) $(id).value = state[id];
-    $("circuit").value = state.circuit;
-    $("sdgRow").hidden = state.circuit !== "bell_rot";
-    $("driftOut").textContent = state.drift.toFixed(2) + " rad";
-    $("padOut").textContent = String(state.pad);
-    $("shotsOut").textContent = state.shots.toLocaleString();
-    $("p2Out").textContent = (state.p2 * 100).toFixed(1) + "%";
-    $("seedOut").textContent = "run #" + (state.seed - 7776);
-    document.querySelectorAll("#scenarios button").forEach((b) =>
-      b.setAttribute("aria-pressed", String(b.dataset.id === state.scenario)));
-    document.querySelectorAll("#viewBasis button").forEach((b) => {
-      b.setAttribute("aria-pressed", String(b.dataset.b === state.viewBasis));
-      b.disabled = !bases.includes(b.dataset.b);
-      b.style.opacity = b.disabled ? 0.4 : 1;
-    });
-  }
-
-  // ------------------------------------------------------------------ wiring
-  SCENARIOS.forEach((s) => {
-    const b = document.createElement("button");
-    b.className = "chip"; b.textContent = s.label; b.dataset.id = s.id;
-    b.addEventListener("click", () => {
-      state = Object.assign({}, BLANK, { shots: state.shots, p2: state.p2 }, s.set, { scenario: s.id });
-      render();
-    });
-    $("scenarios").appendChild(b);
-  });
-  ["Z", "X", "Y"].forEach((bname) => {
-    const b = document.createElement("button");
-    b.textContent = bname; b.dataset.b = bname;
-    b.addEventListener("click", () => { state.viewBasis = bname; render(); });
-    $("viewBasis").appendChild(b);
-  });
-  Object.keys(Q.CIRCUITS).forEach((k) => {
-    const o = document.createElement("option");
-    o.value = k; o.textContent = Q.CIRCUITS[k].label;
-    $("circuit").appendChild(o);
-  });
-  const touch = (fn) => (ev) => { fn(ev.target); state.scenario = null; render(); };
-  for (const id of ["cxFlip", "strayZ", "sdg", "hh", "zOnly", "exact"]) {
-    $(id).addEventListener("change", touch((t) => { state[id] = t.checked; }));
-  }
-  for (const id of ["drift", "pad", "shots", "p2"]) {
-    $(id).addEventListener("input", touch((t) => { state[id] = Number(t.value); }));
-  }
-  $("circuit").addEventListener("change", touch((t) => {
-    state.circuit = t.value;
-    if (t.value !== "bell_rot") state.sdg = false;
-  }));
-  $("rerun").addEventListener("click", () => { state.seed += 1; render(); });
-  render();
-})();
-</script>
+<script src="app.js"></script>
+<script src="lesson.js"></script>
 </body>
 </html>
