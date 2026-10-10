@@ -28,7 +28,7 @@ import numpy as np
 from . import circuits as C
 from . import equiv as E
 from .backends import Backend, exact_probs, MAX_LOCAL_QUBITS
-from .diff import Hunk, build_hybrid, compress, diff_circuits
+from .diff import Hunk, _instrs, build_hybrid, compress, diff_circuits
 from .snapshot import Snapshot, noise_score
 from .stats import counts_to_probs, tvd
 
@@ -65,6 +65,13 @@ class HunkBlame:
 
 
 @dataclass
+class NoiseBlame:
+    hunk: Hunk
+    cost_delta: float   # noise cost the hunk adds (negative: it removes gates)
+    share: float        # fraction of all added cost this hunk accounts for
+
+
+@dataclass
 class Report:
     name: str
     verdict: Verdict
@@ -84,6 +91,7 @@ class Report:
     stats_modified: dict
     hunks: list[Hunk] = field(default_factory=list)
     blame: list[HunkBlame] = field(default_factory=list)
+    noise_blame: list[NoiseBlame] = field(default_factory=list)
     warnings: list[str] = field(default_factory=list)
     # strongest comparison that backed the verdict: probes | statevector | unitary
     equivalence: str = "probes"
@@ -122,7 +130,9 @@ def check(name: str, qc, snap: Snapshot, backend: Backend,
     mod.name = name
     hunks = diff_circuits(golden, mod)
     g_stats, m_stats = C.circuit_stats(golden), C.circuit_stats(mod)
-    cost_g, cost_m = g_stats.noise_cost(), m_stats.noise_cost()
+    weights = snap.noise.cost_weights
+    cost_g = g_stats.noise_cost(**C.cost_kwargs(weights))
+    cost_m = m_stats.noise_cost(**C.cost_kwargs(weights))
 
     def make(verdict, reason, **kw) -> Report:
         base = dict(
@@ -236,7 +246,13 @@ def check(name: str, qc, snap: Snapshot, backend: Backend,
                   + ("explained by the extra gates." if hunks and explained else
                      "not explained by gate count." if hunks else
                      "no circuit change - backend noise model drift?"))
-        return make(Verdict.NOISE_REGRESSION, reason, **common)
+        nblame = _noise_blame(golden, mod, hunks, weights)
+        costly = [b for b in nblame if b.cost_delta > 0][:3]
+        if costly:
+            reason += " Costliest edit(s): " + "; ".join(
+                f"hunk {b.hunk.index} ({_one_line(b.hunk)}, +{b.cost_delta:.3g} cost, "
+                f"{b.share:.0%} of the increase)" for b in costly)
+        return make(Verdict.NOISE_REGRESSION, reason, noise_blame=nblame, **common)
 
     if hunks:
         return make(Verdict.REFACTOR_OK,
@@ -249,6 +265,21 @@ def _one_line(h: Hunk) -> str:
     rm = ", ".join(compress(h.removed)) or "-"
     ad = ", ".join(compress(h.added)) or "-"
     return f"[{rm}] -> [{ad}]"
+
+
+def _noise_blame(golden, mod, hunks, weights) -> list[NoiseBlame]:
+    """Rank edits by how much noise cost they add (estimate from gate counts).
+
+    Unlike the logic blame this runs nothing: cost is additive over gates, so a
+    hunk's contribution is the cost of what it adds minus what it removes.
+    """
+    gi, mi = _instrs(golden), _instrs(mod)
+    deltas = [(h, C.instructions_cost(mi[h.mod_range[0]:h.mod_range[1]], weights)
+               - C.instructions_cost(gi[h.golden_range[0]:h.golden_range[1]], weights))
+              for h in hunks]
+    added = sum(d for _, d in deltas if d > 0)
+    out = [NoiseBlame(h, d, d / added if d > 0 and added > 0 else 0.0) for h, d in deltas]
+    return sorted(out, key=lambda b: -b.cost_delta)
 
 
 def _blame(golden, mod, hunks, snap, backend, bases, tol, cfg) -> list[HunkBlame]:

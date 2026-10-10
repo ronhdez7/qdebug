@@ -15,7 +15,9 @@ from .stats import Dist, mean_std, sample_counts, shot_noise_floor, tvd, counts_
 
 import numpy as np
 
-SNAPSHOT_VERSION = 2   # 2: bases may be per-qubit strings (e.g. "XZY")
+# 2: bases may be per-qubit strings (e.g. "XZY")
+# 3: noise baseline may carry measured cost weights
+SNAPSHOT_VERSION = 3
 
 
 @dataclass
@@ -28,6 +30,8 @@ class NoiseBaseline:
     shot_mean: float             # expected TVD from sampling alone
     shot_floor: float            # 99th percentile of sampling-only TVD
     noise_model: dict = field(default_factory=dict)
+    # measured per-gate cost weights (calibrate.py); None = built-in defaults
+    cost_weights: dict | None = None
 
 
 @dataclass
@@ -72,13 +76,16 @@ def noise_score(counts_list: list[dict], ideal_list: list[Dist]) -> float:
 def record(name: str, qc: QuantumCircuit, backend: Backend, *,
            bases: tuple[str, ...] = C.PROBE_BASES, shots: int = 1000,
            n_seeds: int = 4, base_seed: int = 1000,
-           random_bases: int | None = None) -> Snapshot:
+           random_bases: int | None = None,
+           cost_weights: dict | None = None) -> Snapshot:
     """Run the golden circuit once ideally and ``n_seeds`` times noisily.
 
     ``random_bases`` adds that many seeded per-qubit (mixed) probe bases on top
     of ``bases``. By default none are added while the circuit is small enough
     for ``check`` to compare statevectors exactly, and 4 are added above that,
-    where the probes are the only evidence.
+    where the probes are the only evidence. ``cost_weights`` (from
+    ``calibrate_cost_weights``) is stored so ``check`` scales the noise budget
+    with rates measured on this backend instead of the built-in guess.
     """
     unitary = C.strip_measurements(qc)
     unitary.name = name
@@ -111,7 +118,8 @@ def record(name: str, qc: QuantumCircuit, backend: Backend, *,
         ideal={b: p for b, p in zip(bases, ideal_list)},
         noise=NoiseBaseline(shots=shots, seeds=seeds, scores=scores, mean=mean,
                             std=std, shot_mean=shot_mean, shot_floor=shot_floor,
-                            noise_model=backend.describe()),
+                            noise_model=backend.describe(),
+                            cost_weights=cost_weights),
         created=datetime.now(timezone.utc).isoformat(timespec="seconds"),
     )
 

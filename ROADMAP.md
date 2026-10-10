@@ -21,11 +21,11 @@ Project for the **Qollab x IonQ Quantum Hackathon** (<https://qollab.xyz/program
 | 1. Live IonQ validation | **Not started. Needs the API key.** Opt-in tests are ready (`pytest -m ionq`). |
 | 2. Correctness holes | **Done.** |
 | 3. CI story | **Written, not yet run on GitHub** (nothing is pushed). |
-| 4. Better noise analysis | Not started (stretch). |
+| 4. Better noise analysis | **Done locally.** Native-gate mode and calibration still need a live IonQ run. |
 | 5. Interactive demo | **First version done** (`docs/index.html`), checked in a headless browser. |
 | 6. Submission | Not started. |
 
-Verified at the end of the session: default suite 58 passed, slow test passed (1,020 checks, no
+Verified at the end of the session: default suite 70 passed, slow test passed (1,020 checks, no
 false alarms), demo 12/12 on the local backend.
 
 ### Handoff: what to do next, in order
@@ -39,8 +39,15 @@ false alarms), demo 12/12 on the local backend.
    python -m pytest -m ionq -v
    python -m qdebug demo --backend ionq --noise-model forte-1 --seeds 2 -v
    ```
-   Expect `ghz4_cx_padding` to be the risky row (IonQ may cancel the redundant CX pairs). Then put
-   the real table in the README and fix the fake provider if the real API behaved differently.
+   Expect `ghz4_cx_padding` to be the risky row (IonQ may cancel the redundant CX pairs). If it comes
+   back `REFACTOR_OK`, rerun with native gates, which is what Stage 4 added for this case:
+   ```bash
+   python -m qdebug demo --backend ionq --noise-model forte-1 --seeds 2 --native --calibrate -v
+   ```
+   No native-gate job has been submitted yet, so treat the first one as a test: check that IonQ
+   accepts it and that the calibration line prints a sensible 1q/2q ratio rather than "no
+   measurable noise". Then put the real table in the README and fix the fake provider if the real
+   API behaved differently.
 3. **Read the rubric and deliverables** behind the Qollab login and adjust Stage 6.
 4. **Demo polish (Stage 5):** enable GitHub Pages on `/docs` so the demo has a public URL, add the
    repo link to the page footer, and have someone without a quantum background try it.
@@ -103,11 +110,13 @@ These were found by reading the code against the README. Each is picked up in a 
 6. *(closed)* **`snapshots/` is gitignored, but the README tells users to commit `snapshots/*.json`.**
 7. *(closed)* **Default probe bases disagree.** `record()` defaults to `("Z", "X")`; the CLI and README say
    Z, X, Y.
-8. **Noise budget is a heuristic.** Hardware noise is scaled by a gate-count cost ratio with
+8. *(partly closed: `--calibrate` measures the weights; not yet run on an IonQ noise model)*
+   **Noise budget is a heuristic.** Hardware noise is scaled by a gate-count cost ratio with
    hand-picked weights. Not calibrated against any IonQ noise model.
 9. *(closed, pending first push)* **No CI.** Nothing runs the tests on push.
 10. **Scaling limits.** Exact local simulation caps at 24 qubits; blame is skipped above 12 hunks;
-    mid-circuit measurement, classical control and parameterized circuits are unsupported.
+    mid-circuit measurement, classical control and parameterized circuits are unsupported
+    *(parameterized circuits are now supported through parameter sweeps)*.
 11. *(closed)* `stats.hellinger_fidelity` is unused.
 
 ---

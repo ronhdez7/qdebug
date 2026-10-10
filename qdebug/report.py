@@ -29,6 +29,9 @@ def format_report(r: Report, verbose: bool = True) -> str:
         for b in r.blame:
             lines.append(f"  blame: hunk {b.hunk.index} effect={b.effect:.3g}"
                          + ("  <-- culprit" if b.culprit else ""))
+        for b in r.noise_blame:
+            lines.append(f"  noise blame: hunk {b.hunk.index} cost {b.cost_delta:+.3g}"
+                         + (f"  ({b.share:.0%} of the increase)" if b.share else ""))
     for w in r.warnings:
         lines.append(f"  WARNING: {w}")
     return "\n".join(lines)
@@ -74,7 +77,10 @@ def to_markdown(reports: list[Report], title: str = "qdebug report") -> str:
         for b in r.blame:
             out.append(f"- hunk {b.hunk.index}: effect {b.effect:.3g}"
                        + (" **(culprit)**" if b.culprit else ""))
-        if r.blame:
+        for b in r.noise_blame:
+            out.append(f"- hunk {b.hunk.index}: noise cost {b.cost_delta:+.3g}"
+                       + (f" ({b.share:.0%} of the increase)" if b.share else ""))
+        if r.blame or r.noise_blame:
             out.append("")
         for w in r.warnings:
             out.append(f"> WARNING: {w}\n")

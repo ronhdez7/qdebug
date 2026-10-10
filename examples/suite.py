@@ -9,10 +9,12 @@ Measurements are optional (qdebug adds its own); circuits must be unitary.
 To try the workflow without editing code, flip a bug on with an env var:
     QDEBUG_DEMO_BUG=cx_flip python -m qdebug check --suite examples/suite.py -v
     QDEBUG_DEMO_BUG=padding python -m qdebug check --suite examples/suite.py -v
+    QDEBUG_DEMO_BUG=wrong_param python -m qdebug check --suite examples/suite.py -v
 """
 import os
 
 from qiskit import QuantumCircuit
+from qiskit.circuit import Parameter
 
 
 def ghz(n: int = 4) -> QuantumCircuit:
@@ -40,5 +42,20 @@ def swap_test_like() -> QuantumCircuit:
     return qc
 
 
+def ansatz() -> QuantumCircuit:
+    """Parameterized: qdebug records and checks it at 3 seeded parameter points
+    (ansatz@p0, ansatz@p1, ansatz@p2), so there is nothing to bind by hand."""
+    theta, phi = Parameter("theta"), Parameter("phi")
+    qc = QuantumCircuit(2, name="ansatz")
+    qc.ry(theta, 0)
+    qc.cx(0, 1)
+    qc.rz(phi, 1)
+    if os.environ.get("QDEBUG_DEMO_BUG", "") == "wrong_param":
+        qc.ry(phi, 1)                  # <- the "bug": phi used where theta belongs
+    else:
+        qc.ry(theta, 1)
+    return qc
+
+
 def circuits() -> dict[str, QuantumCircuit]:
-    return {"ghz": ghz(4), "swap_test_like": swap_test_like()}
+    return {"ghz": ghz(4), "swap_test_like": swap_test_like(), "ansatz": ansatz()}

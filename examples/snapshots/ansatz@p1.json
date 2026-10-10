@@ -1,0 +1,71 @@
+{
+  "bases": [
+    "Z",
+    "X",
+    "Y"
+  ],
+  "circuit_b64": "UUlTS0lUDQIFAgAAAAAAAAABcHEACWYACAAAAAIAAAAAAAAAAAAAAAIAAAABAAAAAAAAAAQAAAAAYW5zYXR6QHAxAAAAAAAAAAB7fXEBAAAAAgABAXEAAAAAAAAAAAAAAAAAAAABAAAAAAAAAAAABgAAAAEAAAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABSWUdhdGVxAAAAAGYAAAAAAAAACIB+F7CAXwNAAAYAAAAAAAAAAgAAAAAAAAAAAAAAAAAAAAAAAAEAAAABQ1hHYXRlcQAAAABxAAAAAQAGAAAAAQAAAAEAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAFJaR2F0ZXEAAAABZgAAAAAAAAAI9pBCkAZuA8AABgAAAAEAAAABAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABSWUdhdGVxAAAAAWYAAAAAAAAACIB+F7CAXwNAAAAA////////////////AAAAAAAAAAA=",
+  "created": "2026-10-10T02:31:49+00:00",
+  "ideal": {
+    "X": {
+      "00": 0.21982137732588028,
+      "01": 0.032316613427490946,
+      "10": 0.28017862267411964,
+      "11": 0.46768338657250913
+    },
+    "Y": {
+      "00": 0.3746986143698113,
+      "01": 0.1253013856301886,
+      "10": 0.12530138563018864,
+      "11": 0.37469861436981144
+    },
+    "Z": {
+      "00": 0.015396865614152681,
+      "01": 0.767228651580585,
+      "10": 0.10868724140263121,
+      "11": 0.10868724140263125
+    }
+  },
+  "name": "ansatz@p1",
+  "noise": {
+    "cost_weights": null,
+    "mean": 0.021384619240702837,
+    "noise_model": {
+      "backend": "local-aer",
+      "noise": "depolarizing",
+      "p1": 0.0005,
+      "p2": 0.005,
+      "readout": 0.0
+    },
+    "scores": [
+      0.01632954234427329,
+      0.022028035672261304,
+      0.023530908581765164,
+      0.023649990364511587
+    ],
+    "seeds": [
+      1000,
+      1001,
+      1002,
+      1003
+    ],
+    "shot_floor": 0.0420403616367394,
+    "shot_mean": 0.018101791186553758,
+    "shots": 1000,
+    "std": 0.0034499396805045494
+  },
+  "signature": [
+    "ry(2.42163) q0",
+    "cx q0,q1",
+    "rz(-2.42872) q1",
+    "ry(2.42163) q1"
+  ],
+  "stats": {
+    "depth": 4,
+    "n_1q": 3,
+    "n_2q": 1,
+    "n_multi": 0,
+    "n_qubits": 2
+  },
+  "version": 3
+}

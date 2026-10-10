@@ -67,7 +67,7 @@ python -m qdebug demo --backend ionq --noise-model forte-1 --seeds 2
 python -m pytest -m ionq -v                            # live checks; skipped without a key
 ```
 
-Baseline after the Oct 9 session: 58 tests pass in the default suite (5 more are deselected: 1
+Baseline after the Oct 9 session: 70 tests pass in the default suite (5 more are deselected: 1
 `slow`, 4 `ionq`), the slow test passes, and the demo is 12/12 on the local backend. If your
 starting point is worse than that, report it before changing anything. `tests/test_web_demo.py`
 needs Node.js and is skipped without it.
@@ -81,6 +81,7 @@ qdebug/
   backends.py     Backend ABC; LocalBackend, IonQBackend, QiskitBackendAdapter; make_backend()
   snapshot.py     record(), save(), load(); Snapshot and NoiseBaseline
   equiv.py        exact statevector / unitary distances, global phase removed
+  calibrate.py    measured per-gate noise cost weights (record --calibrate)
   diff.py         difflib over signatures -> hunks; build_hybrid() for blame
   checker.py      check(), Verdict, CheckConfig, Report, noise_budget()
   report.py       console / Markdown / JSON / PNG

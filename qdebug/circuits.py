@@ -20,6 +20,11 @@ def strip_measurements(qc: QuantumCircuit) -> QuantumCircuit:
     control are rejected: the debugger compares output distributions of
     unitary circuits, and silently stripping those would change semantics.
     """
+    if qc.parameters:
+        names = ", ".join(sorted(p.name for p in qc.parameters))
+        raise ValueError(
+            f"{qc.name!r} has unbound parameters ({names}); bind them, or use "
+            "qdebug.expand_parameters() to check it at several parameter points.")
     out = QuantumCircuit(qc.num_qubits, name=qc.name)
     measured: set[int] = set()
     for inst in qc.data:
@@ -89,6 +94,46 @@ def probes(qc: QuantumCircuit, bases: tuple[str, ...]) -> list[QuantumCircuit]:
     return [with_probe(qc, b) for b in bases]
 
 
+# ------------------------------------------------------- parameter sweeps
+
+def parameter_points(qc: QuantumCircuit, n_points: int = 3, seed: int = 0) -> list[dict]:
+    """``n_points`` reproducible bindings for a parameterized circuit.
+
+    Each value depends only on ``(seed, parameter name, point index)``, so the
+    golden and the edited circuit get the same angle for every parameter they
+    share, even if an edit adds, removes or reorders parameters. Angles are
+    generic (never 0 or a multiple of pi/2), where many bugs are invisible.
+    """
+    import hashlib
+    from math import pi
+
+    points = []
+    for i in range(n_points):
+        binding = {}
+        for p in qc.parameters:
+            h = hashlib.sha256(f"{seed}:{p.name}:{i}".encode()).digest()
+            u = int.from_bytes(h[:8], "big") / 2 ** 64          # [0, 1)
+            binding[p] = (2 * u - 1) * pi
+        points.append(binding)
+    return points
+
+
+def expand_parameters(name: str, qc: QuantumCircuit, n_points: int = 3,
+                      seed: int = 0) -> dict[str, QuantumCircuit]:
+    """Turn a parameterized circuit into ``{"name@p0": bound, "name@p1": ...}``.
+
+    A circuit without free parameters is returned unchanged under ``name``.
+    """
+    if not qc.parameters:
+        return {name: qc}
+    out = {}
+    for i, binding in enumerate(parameter_points(qc, n_points, seed)):
+        bound = qc.assign_parameters(binding)
+        bound.name = f"{name}@p{i}"
+        out[bound.name] = bound
+    return out
+
+
 # ---------------------------------------------------------------- signatures
 
 def _fmt_param(p) -> str:
@@ -135,11 +180,11 @@ class CircuitStats:
         return w1 * self.n_1q + w2 * self.n_2q + wm * self.n_multi
 
 
-def circuit_stats(qc: QuantumCircuit) -> CircuitStats:
+def count_gates(instructions) -> tuple[int, int, int]:
+    """(1-qubit, 2-qubit, 3+-qubit) gate counts of an instruction sequence."""
     n1 = n2 = nm = 0
-    for inst in qc.data:
-        op = inst.operation
-        if op.name in ("barrier", "measure"):
+    for inst in instructions:
+        if inst.operation.name in ("barrier", "measure"):
             continue
         k = len(inst.qubits)
         if k == 1:
@@ -148,7 +193,22 @@ def circuit_stats(qc: QuantumCircuit) -> CircuitStats:
             n2 += 1
         else:
             nm += 1
-    return CircuitStats(qc.num_qubits, qc.depth(), n1, n2, nm)
+    return n1, n2, nm
+
+
+def instructions_cost(instructions, weights: dict | None = None) -> float:
+    """Noise cost of a slice of a circuit (same weights as ``noise_cost``)."""
+    n1, n2, nm = count_gates(instructions)
+    return CircuitStats(0, 0, n1, n2, nm).noise_cost(**cost_kwargs(weights))
+
+
+def cost_kwargs(weights: dict | None) -> dict:
+    """Pick the w1/w2/wm entries out of a (possibly richer) weights dict."""
+    return {k: weights[k] for k in ("w1", "w2", "wm") if weights and k in weights}
+
+
+def circuit_stats(qc: QuantumCircuit) -> CircuitStats:
+    return CircuitStats(qc.num_qubits, qc.depth(), *count_gates(qc.data))
 
 
 # ------------------------------------------------------------ serialisation

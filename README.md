@@ -49,6 +49,9 @@ bugs; the report prints that naive result next to ours so the difference is visi
 | Snapshot | `snapshot.py` | `record()` stores the golden circuit, exact ideal distributions and a noise baseline (per-seed `mean TVD(noisy, ideal)`, its std, and the sampling-only floor from multinomial simulation). |
 | Diff + blame | `diff.py` | `difflib` over instruction signatures gives *hunks*. Each hunk is re-applied **alone** to the golden circuit; hunks that move the ideal output are the culprits, ones that don't are harmless. |
 | Classifier | `checker.py` | Logic: `max_basis TVD(ideal_mod, ideal_golden) > tol`, or an exact state mismatch the probes missed → `LOGIC_BUG`. Noise: `noise_dev > budget` → `NOISE_REGRESSION`, with `budget = margin·(shot_floor + (hardware_part + 3σ)·cost_ratio)`. Otherwise `REFACTOR_OK` / `PASS`. |
+| Noise blame | `checker.py` | On `NOISE_REGRESSION`, ranks the edits by the noise cost they add (cost of the gates a hunk adds minus the ones it removes), so the report names the edit that made the circuit noisier. An estimate from gate counts; nothing extra is run. |
+| Cost calibration | `calibrate.py` | `record --calibrate` measures the per-gate noise of 1-qubit and 2-qubit gates on the backend (identity circuits of X·X and CX·CX pairs) and stores the ratio in the snapshot, replacing the built-in guess that a 1-qubit gate costs 0.05 of a 2-qubit gate. |
+| Parameter sweeps | `circuits.py` | A suite circuit with free `Parameter`s is recorded and checked at `--param-points N` (default 3) seeded points as `name@p0`, `name@p1`, ... Values depend only on the parameter's name, so golden and edited circuits always get the same angles. |
 | Reports | `report.py` | Console table, JSON, Markdown, and a logic-vs-noise scatter PNG. |
 | CLI | `cli.py` | `record`, `check`, `demo`, `doctor`. `check` exits 1 on `LOGIC_BUG` (use in CI); `--json` / `--markdown` write reports. |
 
@@ -89,6 +92,7 @@ qdebug/
   backends.py     LocalBackend / IonQBackend / QiskitBackendAdapter
   snapshot.py     record(), save(), load()
   equiv.py        exact statevector / unitary distances (global-phase free)
+  calibrate.py    measured per-gate noise cost weights
   diff.py         structural diff, hunks, hybrid circuits for blame
   checker.py      check(), Verdict, noise budget
   report.py       console / markdown / json / png
@@ -131,6 +135,7 @@ python -m qdebug check $S --markdown report.md      # report for a PR comment
 # no-edit demo of step 2 (the example snapshots are already committed):
 QDEBUG_DEMO_BUG=cx_flip python -m qdebug check $S -v
 QDEBUG_DEMO_BUG=padding python -m qdebug check $S --strict
+QDEBUG_DEMO_BUG=wrong_param python -m qdebug check $S -v   # bug in the parameterized ansatz
 ```
 
 Commit your snapshot directory so CI can run `qdebug check`;
@@ -166,6 +171,7 @@ export IONQ_API_KEY="your_key"            # in a notebook:  %env IONQ_API_KEY=..
 
 python -m qdebug doctor --backend ionq                    # connectivity + bit-order check
 python -m qdebug demo   --backend ionq --noise-model forte-1 --seeds 2
+python -m qdebug demo   --backend ionq --noise-model forte-1 --seeds 2 --native --calibrate
 ```
 
 * Noise models: `forte-1`, `forte-enterprise-1` (current), `aria-1`, `aria-2` (legacy). Pass with `--noise-model`.
@@ -187,6 +193,10 @@ be = QiskitBackendAdapter(platform_backend)      # noisy counts from it, exact i
 * Circuits are transpiled to `qiskit_ionq`'s accepted gate list at `optimization_level=0`.
 * `doctor`/`check` cross-check IonQ's ideal output against local exact simulation and **warn on
   mismatch** (e.g. bit-ordering), so a wrong convention can't silently flip verdicts.
+* `--native` sends the **noisy** runs in IonQ's native gates (`gpi`, `gpi2`, and `ms` or `zz` depending
+  on the noise model), translated gate by gate, so the cloud compiler cannot cancel redundant gates
+  before their noise is measured. Ideal runs stay on the default gateset. Use it together with
+  `--calibrate`, which measures nothing on the default gateset if IonQ cancels the calibration pairs.
 * Default logic tolerance is `1e-4` on IonQ (probabilities travel over the API) vs `1e-9` locally;
   override with `--logic-tol`.
 
@@ -212,9 +222,14 @@ be = QiskitBackendAdapter(platform_backend)      # noisy counts from it, exact i
   credits are provisioned.
 * **IonQ compiles abstract-gate circuits server-side.** The padding demo (`ghz4_cx_padding`, 80 redundant
   CX) is guaranteed on the local backend; IonQ's optimizer may cancel the redundant pairs, in which case
-  you'll see `REFACTOR_OK` (also a correct answer: nothing extra is executed).
-* The noise budget scales hardware noise by a simple cost ratio (2q-gate-dominated); it's a heuristic.
-  IonQ notes its noise models are approximations and shouldn't be used to predict specific hardware results.
+  you'll see `REFACTOR_OK` (also a correct answer: nothing extra is executed). `--native` is meant to
+  prevent that. Its translation is tested offline (every gate kept, unitary unchanged, for both `ms`
+  and `zz`), but **no native-gate job has been submitted to IonQ yet**.
+* The noise budget scales hardware noise by a cost ratio (2q-gate-dominated). `--calibrate` measures
+  the weights and recovers the true ratio on the local backend; it has not been run on an IonQ noise
+  model. IonQ notes its noise models are approximations and shouldn't be used to predict specific
+  hardware results.
+* Noise blame is an estimate from gate counts, not a measurement of each edit.
 * Local noise is a plain depolarizing model (`--p1/--p2`); good for development, not hardware-faithful.
 * Exact local ideal simulation is limited to 24 qubits; IonQ's ideal simulator goes to 29.
 
@@ -222,10 +237,9 @@ be = QiskitBackendAdapter(platform_backend)      # noisy counts from it, exact i
 
 See [ROADMAP.md](ROADMAP.md) for the plan and what is done. Still open:
 
-1. Noise-aware blame: rank culprit hunks by estimated cost increase for `NOISE_REGRESSION`.
-2. Parameter sweeps (variational circuits): snapshot at several parameter points.
-3. Native-gate mode on IonQ to stop server-side optimization when you want to measure raw noise.
-4. Stabilizer-based equivalence for wide Clifford circuits, beyond the 20-qubit exact limit.
+1. Stabilizer-based equivalence for wide Clifford circuits, beyond the 20-qubit exact limit.
+2. Measured noise blame: run each edit alone under the noise model instead of estimating from gate counts.
+3. Mid-circuit measurement and classical control.
 
 ## License
 

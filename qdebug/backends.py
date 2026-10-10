@@ -120,6 +120,44 @@ class LocalBackend(Backend):
 
 # -------------------------------------------------------------------- IonQ
 
+def to_native(circuits: list[QuantumCircuit], backend) -> list[QuantumCircuit]:
+    """Rewrite circuits to IonQ native gates (gpi, gpi2, ms or zz) for a
+    ``gateset="native"`` qiskit-ionq backend, keeping every gate.
+
+    IonQ's cloud compiler optimises circuits sent in the default ``qis``
+    gateset, so redundant gates may never run and their noise goes unmeasured.
+    Native-gate circuits are executed as written. ``optimization_level=0``
+    translates gate by gate without cancelling anything.
+
+    Transpiling against the backend pads the circuit to the device width; the
+    idle wires are dropped again so the job stays the size of the circuit.
+    """
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        wide = transpile(circuits, backend=backend, optimization_level=0,
+                         num_processes=1)
+    out = []
+    for src, tc in zip(circuits, wide):
+        n = src.num_qubits
+        slim = QuantumCircuit(n, src.num_clbits, name=src.name)
+        for inst in tc.data:
+            qs = [tc.find_bit(q).index for q in inst.qubits]
+            if inst.operation.name == "barrier":
+                qs = [q for q in qs if q < n]
+                if not qs:
+                    continue
+                slim.barrier(qs)
+                continue
+            if max(qs) >= n:
+                raise RuntimeError(
+                    f"native transpilation moved {src.name!r} onto wire {max(qs)}; "
+                    "expected the trivial layout")
+            cs = [tc.find_bit(c).index for c in inst.clbits]
+            slim.append(inst.operation, qs, cs)
+        out.append(slim)
+    return out
+
+
 class IonQBackend(Backend):
     """IonQ cloud simulator via qiskit-ionq (ideal + hardware noise models).
 
@@ -128,7 +166,7 @@ class IonQBackend(Backend):
     """
 
     def __init__(self, noise_model: str = "forte-1", api_key: str | None = None,
-                 backend_name: str = "simulator"):
+                 backend_name: str = "simulator", native: bool = False):
         try:
             from qiskit_ionq import IonQProvider
         except ImportError as e:  # pragma: no cover
@@ -144,14 +182,23 @@ class IonQBackend(Backend):
         self.default_logic_tol = 1e-4
         self.noise_model = noise_model
         self.backend_name = backend_name
+        # native=True submits the *noisy* runs in IonQ's native gates so the
+        # cloud compiler cannot optimise the circuit under test. Ideal runs stay
+        # on the default gateset: they only need the circuit's logic.
+        self.native = native
         self.name = f"ionq-{backend_name}"
 
     def describe(self) -> dict:
-        return {"backend": self.name, "noise_model": self.noise_model}
+        return {"backend": self.name, "noise_model": self.noise_model,
+                "gateset": "native" if self.native else "qis"}
 
-    def _backend(self, noise_model: str, seed: int | None = None):
+    def _backend(self, noise_model: str, seed: int | None = None,
+                 gateset: str = "qis"):
         # fresh backend object per call so options never leak between jobs
-        be = self.provider.get_backend(self.backend_name)
+        if gateset == "qis":
+            be = self.provider.get_backend(self.backend_name)
+        else:
+            be = self.provider.get_backend(self.backend_name, gateset=gateset)
         opts = {"noise_model": noise_model}
         if seed is not None:
             opts["sampler_seed"] = seed
@@ -177,8 +224,12 @@ class IonQBackend(Backend):
         return [clean_probs(dict(p)) for p in probs]
 
     def noisy_counts(self, circuits, shots, seed):
-        be = self._backend(self.noise_model, seed=seed)
-        job = be.run(self._prepare(circuits), shots=shots)
+        if self.native:
+            be = self._backend(self.noise_model, seed=seed, gateset="native")
+            job = be.run(to_native(circuits, be), shots=shots)
+        else:
+            be = self._backend(self.noise_model, seed=seed)
+            job = be.run(self._prepare(circuits), shots=shots)
         counts = _as_list(job.get_counts(), len(circuits))
         return [{normalize_key(k): v for k, v in dict(c).items()} for c in counts]
 
@@ -214,5 +265,6 @@ def make_backend(kind: str, noise_model: str = "forte-1", **kw) -> Backend:
         return LocalBackend(**{k: v for k, v in kw.items()
                                if k in ("p1", "p2", "readout")})
     if kind == "ionq":
-        return IonQBackend(noise_model=noise_model, api_key=kw.get("api_key"))
+        return IonQBackend(noise_model=noise_model, api_key=kw.get("api_key"),
+                           native=bool(kw.get("native")))
     raise ValueError(f"unknown backend {kind!r} (use 'local' or 'ionq')")

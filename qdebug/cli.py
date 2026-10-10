@@ -10,6 +10,8 @@ from qiskit import QuantumCircuit
 
 from . import demo_suite
 from .backends import make_backend
+from .calibrate import calibrate_cost_weights
+from .circuits import expand_parameters
 from .checker import CheckConfig, Verdict, check
 from .report import format_report, plot_reports, save_json, summary_table, to_markdown
 from .snapshot import load, record, save
@@ -39,14 +41,45 @@ def _add_common(p: argparse.ArgumentParser) -> None:
                         "distributions, same output state, or same unitary")
     p.add_argument("--logic-tol", type=float, default=None)
     p.add_argument("--snapshots", default="snapshots")
+    p.add_argument("--native", action="store_true",
+                   help="IonQ only: run noisy jobs in native gates so the cloud "
+                        "compiler cannot optimise the circuit under test")
+    p.add_argument("--param-points", type=int, default=3,
+                   help="parameter points at which a parameterized circuit is "
+                        "recorded and checked (as name@p0, name@p1, ...)")
 
 
 def _backend(a):
-    return make_backend(a.backend, noise_model=a.noise_model, p1=a.p1, p2=a.p2)
+    return make_backend(a.backend, noise_model=a.noise_model, p1=a.p1, p2=a.p2,
+                        native=a.native)
 
 
-def load_suite(path: str) -> dict[str, QuantumCircuit]:
-    """``--suite demo`` or a .py file defining ``circuits() -> {name: circuit}``."""
+def _calibrate(a, be) -> dict | None:
+    if not getattr(a, "calibrate", False):
+        return None
+    _say(f"calibrating gate costs on {be.name} ...")
+    w = calibrate_cost_weights(be)
+    if w is None:
+        _say("  no measurable noise on the calibration circuits (noiseless backend, "
+             "or the backend optimised them away - try --native); keeping defaults")
+    else:
+        _say(f"  1q gate = {w['w1']:.3f} x a 2q gate "
+             f"(per-gate rates {w['rate_1q']:.2e} / {w['rate_2q']:.2e})")
+    return w
+
+
+def load_suite(path: str, param_points: int = 3) -> dict[str, QuantumCircuit]:
+    """``--suite demo`` or a .py file defining ``circuits() -> {name: circuit}``.
+
+    Parameterized circuits are expanded into one bound circuit per point.
+    """
+    out: dict[str, QuantumCircuit] = {}
+    for name, qc in _load_suite(path).items():
+        out.update(expand_parameters(name, qc, param_points))
+    return out
+
+
+def _load_suite(path: str) -> dict[str, QuantumCircuit]:
     if path == "demo":
         return demo_suite.golden_circuits()
     spec = importlib.util.spec_from_file_location("qdebug_user_suite", path)
@@ -62,10 +95,12 @@ def load_suite(path: str) -> dict[str, QuantumCircuit]:
 
 def cmd_record(a) -> int:
     be = _backend(a)
-    for name, qc in load_suite(a.suite).items():
+    weights = _calibrate(a, be)
+    for name, qc in load_suite(a.suite, a.param_points).items():
         _say(f"recording {name} on {be.name} ...")
         snap = record(name, qc, be, bases=tuple(a.bases), shots=a.shots,
-                      n_seeds=a.seeds, random_bases=a.random_bases)
+                      n_seeds=a.seeds, random_bases=a.random_bases,
+                      cost_weights=weights)
         p = save(snap, a.snapshots)
         _say(f"  saved {p}  (noise baseline {snap.noise.mean:.4f} +/- {snap.noise.std:.4f})")
     return 0
@@ -75,7 +110,7 @@ def cmd_check(a) -> int:
     be = _backend(a)
     cfg = CheckConfig(logic_tol=a.logic_tol, equivalence=a.equivalence)
     reports = []
-    for name, qc in load_suite(a.suite).items():
+    for name, qc in load_suite(a.suite, a.param_points).items():
         snap = load(name, a.snapshots)
         r = check(name, qc, snap, be, cfg)
         reports.append(r)
@@ -96,11 +131,13 @@ def cmd_demo(a) -> int:
     out = Path(a.out)
     out.mkdir(parents=True, exist_ok=True)
     _say(f"backend: {be.describe()}")
+    weights = _calibrate(a, be)
     _say("recording golden snapshots ...")
     snaps = {}
     for name, qc in demo_suite.golden_circuits().items():
         snaps[name] = record(name, qc, be, bases=tuple(a.bases), shots=a.shots,
-                             n_seeds=a.seeds, random_bases=a.random_bases)
+                             n_seeds=a.seeds, random_bases=a.random_bases,
+                             cost_weights=weights)
         save(snaps[name], out / "snapshots")
         _say(f"  {name:9s} noise baseline {snaps[name].noise.mean:.4f} "
              f"(sampling alone ~{snaps[name].noise.shot_mean:.4f})")
@@ -146,6 +183,9 @@ def main(argv: list[str] | None = None) -> int:
 
     p = sub.add_parser("record", help="record golden snapshots for a suite")
     p.add_argument("--suite", required=True, help="'demo' or path to suite .py")
+    p.add_argument("--calibrate", action="store_true",
+                   help="measure per-gate noise cost on the backend first and "
+                        "store it in the snapshots")
     _add_common(p)
     p.set_defaults(fn=cmd_record)
 
@@ -161,6 +201,8 @@ def main(argv: list[str] | None = None) -> int:
     p = sub.add_parser("demo", help="run the built-in bug-injection demo")
     p.add_argument("--out", default="demo_out")
     p.add_argument("--pad-pairs", type=int, default=40)
+    p.add_argument("--calibrate", action="store_true",
+                   help="measure per-gate noise cost on the backend first")
     p.add_argument("--assert-all", action="store_true",
                    help="exit 2 if any verdict differs from the expected one")
     p.add_argument("-v", "--verbose", action="store_true")
