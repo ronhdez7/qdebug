@@ -52,7 +52,7 @@ python -m qdebug record --suite examples/suite.py --snapshots examples/snapshots
 python -m qdebug check --suite examples/suite.py --snapshots examples/snapshots -v
 ```
 
-IonQ's cloud simulator is an optional backend for noisy runs. It requires a user-provided `IONQ_API_KEY`; never put that key in project files. Ideal verdict probabilities are computed locally and exactly, while remote IonQ ideal results are used as a consistency diagnostic.
+qdebug's direct IonQ backend is an optional path for noisy runs and requires a user-provided `IONQ_API_KEY`; never put that key in project files. Its four live IonQ tests passed. The Qollab entry point runs on its free built-in and AWS Braket local simulators. Qollab's remote Forte-1 backend currently fails with this adapter and is not required for the free local-simulator project. Ideal verdict probabilities are computed locally and exactly.
 
 ### How it works
 
@@ -61,6 +61,8 @@ qdebug records exact ideal distributions in Z, X, and Y measurement bases, plus 
 ### Project status
 
 - Local demo: 12 of 12 expected verdicts matched.
+- Quickstart notebook: all code cells executed on local Aer; all 12 mutant verdicts matched and the results plot rendered.
+- Qollab project runner: unchanged circuit returns `PASS`; flipped-CX circuit returns `LOGIC_BUG` on the free local simulators.
 - IonQ live checks: 4 passed, including bit-order smoke test, remote probability support, reproducible noisy counts, and end-to-end verdicts.
 - License: MIT.
 - Built with Qiskit and AI assistance; the code and results were reviewed and tested by the project team.

@@ -39,8 +39,11 @@ Do not include `.env`, API keys, `.venv`, tests, or local snapshots.
 Choose a free local simulator first. Select **Run Project**, choose the
 simulator, and start the run. Qollab's runner exposes the selected Qiskit
 backend as `backend`; no provider setup or API key belongs in the project.
-`shots` and `seed` are adjustable in the Run settings. Each backend call
-submits one circuit, which also works with Qollab's one-job-per-run IonQ path.
+`shots` and `seed` are adjustable in the Run settings. The Qollab entry point
+has been verified with the built-in and AWS Braket local simulators. Qollab's
+remote Forte-1/IonQ backend currently fails with this adapter; it is not
+required for the free local-simulator project. This is separate from qdebug's
+direct IonQ backend, whose live tests pass.
 
 The output checks the unchanged GHZ circuit (`PASS`) and a flipped control and
 target (`LOGIC_BUG`). The selected backend determines the noisy counts; exact
