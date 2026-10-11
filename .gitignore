@@ -3,6 +3,7 @@ __pycache__/
 .pytest_cache/
 *.egg-info/
 demo_out/
+qollab-upload.zip
 docs/benchmark/results.json
 .env
 .venv
