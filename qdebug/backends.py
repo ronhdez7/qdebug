@@ -10,9 +10,10 @@ Implementations
 * :class:`LocalBackend`  - exact statevector probabilities + Qiskit Aer with a
   depolarizing noise model (an IonQ-*like* approximation). No account needed;
   this is what the tests and offline development use.
-* :class:`IonQBackend`   - IonQ cloud simulator through ``qiskit-ionq``. Ideal
-  jobs return exact probabilities (``job.get_probabilities()``); noisy jobs use
-  one of IonQ's hardware noise models (e.g. ``forte-1``) with a reproducible seed.
+* :class:`IonQBackend`   - IonQ cloud simulator through ``qiskit-ionq``. Exact
+    ideal probabilities come from local statevector simulation; remote ideal
+    probabilities are available for diagnostics. Noisy jobs use one of IonQ's
+    hardware noise models (e.g. ``forte-1``) with a reproducible seed.
 * :class:`QiskitBackendAdapter` - wrap *any* other Qiskit backend that can
   return counts (handy if the hackathon platform ships its own simulator).
 """
@@ -163,7 +164,14 @@ class IonQBackend(Backend):
 
     The API key is read from ``IONQ_API_KEY`` unless passed explicitly. Ideal
     and noisy simulation are free on IonQ's cloud simulator.
+
+    Ideal probabilities are computed locally because qiskit-ionq's ideal
+    simulator result formatting samples one shot and drops unobserved outcomes.
+    ``remote_ideal_probs`` is retained for checking the cloud result; IonQ's
+    returned probabilities are rounded to three decimal places.
     """
+
+    remote_probability_resolution = 1e-3
 
     def __init__(self, noise_model: str = "forte-1", api_key: str | None = None,
                  backend_name: str = "simulator", native: bool = False):
@@ -179,7 +187,6 @@ class IonQBackend(Backend):
                 "--backend local."
             )
         self.provider = IonQProvider(key)
-        self.default_logic_tol = 1e-4
         self.noise_model = noise_model
         self.backend_name = backend_name
         # native=True submits the *noisy* runs in IonQ's native gates so the
@@ -218,10 +225,62 @@ class IonQBackend(Backend):
             return circuits
 
     def ideal_probs(self, circuits):
+        return [exact_probs(circuit) for circuit in circuits]
+
+    def remote_ideal_probs(self, circuits):
         be = self._backend("ideal")
         job = be.run(self._prepare(circuits), shots=1)
-        probs = _as_list(job.get_probabilities(), len(circuits))
-        return [clean_probs(dict(p)) for p in probs]
+        client = getattr(job, "_client", None)
+        if client is None:
+            probs = _as_list(job.get_probabilities(), len(circuits))
+            return [clean_probs(dict(p)) for p in probs]
+
+        # qiskit-ionq 1.1.1 removes exact-probability bins absent from its
+        # client-side one-shot sample. Read the same raw payload before that
+        # lossy formatting step, then apply the SDK's recorded measurement map.
+        job.wait_for_final_state()
+        results_url = job._results_urls.get("probabilities")
+        if not results_url:
+            probs = _as_list(job.get_probabilities(), len(circuits))
+            return [clean_probs(dict(p)) for p in probs]
+        payload = client.get_results(results_url=results_url)
+
+        def is_histogram(value):
+            return isinstance(value, dict) and all(
+                isinstance(probability, (int, float))
+                for probability in value.values()
+            )
+
+        if isinstance(payload, list):
+            raw_probs = payload
+        elif isinstance(payload, dict) and payload and all(
+                is_histogram(value) for value in payload.values()):
+            raw_probs = list(payload.values())
+        elif isinstance(payload, dict):
+            raw_probs = [payload]
+        else:
+            raise ValueError("unexpected IonQ probability payload")
+        if len(raw_probs) != len(circuits):
+            raise ValueError(
+                f"IonQ returned {len(raw_probs)} probability distributions "
+                f"for {len(circuits)} circuits"
+            )
+
+        from qiskit_ionq.ionq_job import map_output
+
+        clbits_per_circuit = job._clbits
+        if len(clbits_per_circuit) != len(circuits):
+            raise ValueError("IonQ result is missing per-circuit measurement maps")
+        output = []
+        for circuit, clbits, raw in zip(circuits, clbits_per_circuit, raw_probs):
+            measured_bits = clbits or list(range(circuit.num_qubits))
+            mapped = map_output(raw, measured_bits, circuit.num_qubits)
+            width = len(measured_bits)
+            output.append(clean_probs({
+                format(int(key), f"0{width}b"): probability
+                for key, probability in mapped.items()
+            }))
+        return output
 
     def noisy_counts(self, circuits, shots, seed):
         if self.native:

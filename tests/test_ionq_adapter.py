@@ -27,6 +27,29 @@ class FakeJob:
         return self._shape(self._c)
 
 
+class FakeProbabilityClient:
+    def __init__(self, payload):
+        self.payload = payload
+
+    def get_results(self, results_url):
+        assert results_url == "probabilities-url"
+        return self.payload
+
+
+class FakeRawProbabilityJob:
+    def __init__(self, payload, clbits):
+        self._client = FakeProbabilityClient(payload)
+        self._results_urls = {"probabilities": "probabilities-url"}
+        self._clbits = clbits
+
+    def wait_for_final_state(self):
+        pass
+
+    def get_probabilities(self):
+        # qiskit-ionq 1.1.1 filters probabilities by one-shot sampled counts.
+        return [{"111": 0.5}, {"001": 1.0}]
+
+
 class FakeIonQBackend:
     log = []
 
@@ -73,7 +96,7 @@ def test_requires_api_key(monkeypatch):
 def test_ideal_and_noisy_options(ionq):
     from qdebug.circuits import probes
     pcs = probes(bell(), ("Z", "X"))
-    p = ionq.ideal_probs(pcs)
+    p = ionq.remote_ideal_probs(pcs)
     assert len(p) == 2 and abs(sum(p[0].values()) - 1) < 1e-9
     c = ionq.noisy_counts(pcs, 300, seed=42)
     assert sum(c[0].values()) == 300
@@ -85,8 +108,39 @@ def test_ideal_and_noisy_options(ionq):
 def test_single_circuit_job_shape_is_handled(ionq):
     from qdebug.circuits import probes
     pc = probes(bell(), ("Z",))
-    assert len(ionq.ideal_probs(pc)) == 1
+    assert len(ionq.remote_ideal_probs(pc)) == 1
     assert len(ionq.noisy_counts(pc, 50, 1)) == 1
+
+
+def test_ideal_probabilities_keep_all_raw_outcomes(ionq, monkeypatch):
+    from qiskit import QuantumCircuit
+    from qdebug.circuits import probes
+
+    qc = QuantumCircuit(3, name="asym")
+    qc.x(0)
+    qc.h(1)
+    qc.cx(1, 2)
+    qc.rz(0.3, 2)
+    one_hot = QuantumCircuit(3, name="one_hot")
+    one_hot.x(0)
+    circuits = probes(qc, ("Z",)) + probes(one_hot, ("Z",))
+    payload = {"child-1": {"1": 0.5, "7": 0.5}, "child-2": {"1": 1.0}}
+
+    def run_with_raw_probabilities(self, submitted, shots=1):
+        return FakeRawProbabilityJob(payload, [[0, 1, 2] for _ in submitted])
+
+    monkeypatch.setattr(FakeIonQBackend, "run", run_with_raw_probabilities)
+
+    assert ionq.remote_ideal_probs(circuits) == [
+        {"001": 0.5, "111": 0.5},
+        {"001": 1.0},
+    ]
+
+
+def test_ideal_probabilities_are_exact_local_results(ionq):
+    from qdebug.circuits import probes
+    circuits = probes(bell(), ("Z", "X"))
+    assert ionq.ideal_probs(circuits) == [exact_probs(circuit) for circuit in circuits]
 
 
 def test_end_to_end_check_with_ionq_backend(ionq):
@@ -96,13 +150,13 @@ def test_end_to_end_check_with_ionq_backend(ionq):
     assert ok.verdict is Verdict.PASS and not ok.warnings
     bug = check("ghz4", ghz4(flip_first_cx=True), snap, ionq, CheckConfig())
     assert bug.verdict is Verdict.LOGIC_BUG
-    assert ionq.default_logic_tol == 1e-4 and bug.logic_tol == 1e-4
+    assert ionq.default_logic_tol == 1e-9 and bug.logic_tol == 1e-9
 
 
 def test_cross_check_warns_on_bit_order_mismatch(ionq, monkeypatch):
     """If IonQ's ideal output were bit-reversed vs Qiskit, we must say so."""
     snap = record("ghz4", ghz4(flip_first_cx=False), ionq, shots=300, n_seeds=2)
-    real = ionq.ideal_probs
+    real = ionq.remote_ideal_probs
 
     def reversed_probs(cs):
         return [{k[::-1]: v for k, v in p.items()} for p in real(cs)]
@@ -112,6 +166,6 @@ def test_cross_check_warns_on_bit_order_mismatch(ionq, monkeypatch):
     qc = QuantumCircuit(3, name="ghz4")
     qc.x(0)
     snap2 = record("ghz4", qc, ionq, shots=300, n_seeds=2)
-    monkeypatch.setattr(ionq, "ideal_probs", reversed_probs)
+    monkeypatch.setattr(ionq, "remote_ideal_probs", reversed_probs)
     r = check("ghz4", qc, snap2, ionq)
     assert any("bit ordering" in w for w in r.warnings)

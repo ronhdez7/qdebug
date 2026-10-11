@@ -111,8 +111,11 @@ tests/              pytest; test_ionq_adapter.py uses a fake qiskit-ionq provide
   and returns one result per circuit, in order.
 - **Seeded and reproducible.** Noisy runs and the shot-noise floor take explicit seeds. Do not
   introduce unseeded randomness.
-- **Ideal probabilities must be exact**, not re-sampled. On IonQ that means
-  `job.get_probabilities()`, not `get_counts()`.
+- **Ideal probabilities must be exact**, not re-sampled. IonQ verdicts use local statevector
+  probabilities (up to the local 24-qubit limit). `qiskit-ionq 1.1.1`'s `job.get_probabilities()`
+  filters outcomes through its one-shot sampler, and the raw remote probabilities are rounded to
+  three decimals; use those raw values only for diagnostics, never for verdicts or instead of
+  `get_counts()` on noisy runs.
 - **The default test suite needs no network and no API key.** Live IonQ tests are opt-in and
   skipped when the key is missing.
 - **Unsupported circuits fail loudly.** Mid-circuit measurement and classical control raise a clear

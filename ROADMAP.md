@@ -49,7 +49,9 @@ false alarms), demo 12/12 on the local backend.
    accepts it and that the calibration line prints a sensible 1q/2q ratio rather than "no
    measurable noise". Then put the real table in the README and fix the fake provider if the real
    API behaved differently.
-3. **Read the rubric and deliverables** behind the Qollab login and adjust Stage 6.
+3. **Stage 6 deliverables are now known** (Rules & terms, Oct 10). Remaining human work: publish
+   on Qollab, 2–3 min public video, project page, theme = Quantum Unlocked, attribution (added
+   to README / demo / notebook). IonQ is optional for scoring.
 4. **Demo polish (Stage 5):** enable GitHub Pages on `/docs` so the demo has a public URL, add the
    repo link to the page footer, and have someone without a quantum background go through the
    lesson. Once the key works, record `forte-1` / `aria-1` runs for the demo circuits and add a
@@ -157,9 +159,9 @@ Recommendation: submit under **Quantum Unlocked** with Stage 5 as the interactiv
 the developer-tool story as the "worth forking" pitch. If the team would rather stay a pure dev
 tool, drop the interactive part of Stage 5 and submit as unthemed.
 
-**Not yet known:** the judging rubric and exact submission deliverables (video? write-up?). They
-sit behind the Qollab login ("Rules & terms", "How it works"). A developer needs to read them and
-update Stage 6.
+**Deliverables (confirmed Oct 10):** Qiskit + MIT, runnable on Qollab, project page, 2–3 min public
+video, attribution line, theme declared at submit. Rubric: Novelty & Creativity, Technical
+Execution, Impact Potential, Documentation Quality. See Stage 6.
 
 ---
 
@@ -242,11 +244,38 @@ logic bug and noise afterwards.
 
 ### Stage 6: Submission (reserve the last 3 to 4 h, hard stop Oct 11, 19:00 ET)
 
-- Execute the notebook top to bottom and commit it with outputs.
+Confirmed from the Qollab Rules & terms / How it works pages (Oct 10):
+
+**Every project must**
+- Use Qiskit, MIT license, and be published and **runnable on Qollab.xyz** before the deadline
+  (judges open the project page and press Run on a **free local simulator**; IonQ results neither
+  add nor subtract points).
+- Have a Qollab project page: what it does, the problem, how to run it, enough to fork.
+- Include a **2–3 minute demo video** at a public link with **no sign-in** (YouTube / Loom / Vimeo /
+  Drive). Screen recording + voiceover is enough.
+- Include the attribution **"This effort is supported by Qollab & IonQ"**.
+- Stay on Qollab for 12 months. Outside repos must also be MIT, public, no secrets.
+- Be built in the window; disclose prior work / AI / templates. Theme is declared **at submit time**.
+- Meet the "beyond the tutorial bar" (novel application, technical extension, or educational
+  contribution). Panels may zero Novelty and Technical Execution if it fails that bar.
+
+**Qollab runtime notes that affect us**
+- Local simulators accept many jobs per run; **IonQ accepts one job per run**. The CLI demo is for
+  local / a keyed laptop, not for a judge hitting IonQ on Qollab.
+- Network from Qollab is GET-only, CORS; never put `IONQ_API_KEY` in project files.
+- The notebook must not prompt (`getpass`) on Run-all; default to local Aer.
+- Safari cannot run Qollab projects (needs WebAssembly JSPI). Chrome / Edge / Brave / Firefox 153+.
+- Captain submits from the registration page; up to 5 projects; edits until Oct 11, 19:00 ET.
+
+**Rubric (same locally and globally):** Novelty & Creativity, Technical Execution, Impact Potential,
+Documentation Quality. Submit under **Quantum Unlocked**. Specialty awards need a theme fit;
+placement awards do not.
+
+**Repo checklist for Stage 6**
+- Execute the notebook top to bottom on local Aer and commit it with outputs (no API key in it).
 - README: lead with the picture and the one-command demo; move internals lower.
 - Fresh-clone test on a clean machine or container.
-- Whatever the rubric requires (video, write-up, theme selection). **A developer must confirm these
-  from the Qollab "Rules & terms" page.**
+- Publish on Qollab, fill the project page, attach the video, pick Quantum Unlocked.
 - Tag the submitted commit.
 
 **Done when:** it is submitted. Freeze new features at Oct 11, 15:00 ET.
@@ -269,7 +298,6 @@ Never cut Stage 1 or Stage 6.
 
 ## 5. Needs a human
 
-- IonQ API key (Stage 1).
-- License choice (Stage 0).
-- Theme choice and the rubric/deliverables from behind the Qollab login (Stages 5 and 6).
-- Pushing to the remote and creating the GitHub repo/PRs. Agents only commit locally.
+- Publish on Qollab, fill the project page, record the 2–3 min public video, declare Quantum Unlocked.
+- Pushing to a public git host. Agents only commit locally.
+- IonQ API key (optional for scoring; still useful for a live table in the README). MIT license is already in the tree.

@@ -32,8 +32,8 @@ def test_doctor_passes_on_ionq():
     assert main(["doctor", "--backend", "ionq"]) == 0
 
 
-def test_ideal_probabilities_match_local_exact_simulation(ionq):
-    """Bit order, key format and exactness in one go (asymmetric circuit)."""
+def test_ideal_probabilities_and_remote_support(ionq):
+    """Verdicts use exact local probabilities; remote probes preserve support."""
     from qiskit import QuantumCircuit
     qc = QuantumCircuit(3, name="asym")
     qc.x(0)
@@ -41,10 +41,13 @@ def test_ideal_probabilities_match_local_exact_simulation(ionq):
     qc.cx(1, 2)
     qc.rz(0.3, 2)
     pcs = probes(qc, ("Z", "X", "Y"))
-    remote = ionq.ideal_probs(pcs)
+    local = ionq.ideal_probs(pcs)
+    remote = ionq.remote_ideal_probs(pcs)
     assert len(remote) == len(pcs)
-    for p, c in zip(remote, pcs):
-        assert tvd(p, exact_probs(c)) < ionq.default_logic_tol
+    for p, exact, c in zip(remote, local, pcs):
+        assert set(p) == set(exact)
+        assert abs(sum(p.values()) - 1.0) < 1e-9
+        assert tvd(exact, exact_probs(c)) < 1e-12
 
 
 def test_noisy_counts_shape_and_seed_reproducibility(ionq):

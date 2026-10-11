@@ -49,7 +49,7 @@ bugs; the report prints that naive result next to ours so the difference is visi
 |---|---|---|
 | Probe bases | `circuits.py` | Appends basis changes (Z = none, X = `H`, Y = `S†·H`) + `measure_all`. Measuring only in Z hides phase bugs (a stray `Z` before readout), so by default we measure in Z, X, Y. A basis can also be one letter per qubit (`"XZY"`); `--random-bases N` adds N seeded mixed bases, stored in the snapshot. |
 | Exact equivalence | `equiv.py` | All-Z/all-X/all-Y probes are not a complete description of a state: two different states can agree on all three. So for edited circuits up to 20 qubits the output **statevectors** are compared exactly (up to global phase), and up to 10 qubits the **unitaries** too. `--equivalence state` (default) fails on a state change and only warns when just the unitary differs; `unitary` fails on both; `probes` switches the exact checks off. |
-| Backends | `backends.py` | `LocalBackend` (exact statevector + Aer depolarizing noise), `IonQBackend` (IonQ cloud simulator), `QiskitBackendAdapter` (any other Qiskit backend). All expose `ideal_probs()` and `noisy_counts(shots, seed)`. |
+| Backends | `backends.py` | `LocalBackend` (exact statevector + Aer depolarizing noise), `IonQBackend` (IonQ noisy simulator + exact local ideal probabilities), `QiskitBackendAdapter` (any other Qiskit backend). All expose `ideal_probs()` and `noisy_counts(shots, seed)`. |
 | Snapshot | `snapshot.py` | `record()` stores the golden circuit, exact ideal distributions and a noise baseline (per-seed `mean TVD(noisy, ideal)`, its std, and the sampling-only floor from multinomial simulation). |
 | Diff + blame | `diff.py` | `difflib` over instruction signatures gives *hunks*. Each hunk is re-applied **alone** to the golden circuit; hunks that move the ideal output are the culprits, ones that don't are harmless. |
 | Classifier | `checker.py` | Logic: `max_basis TVD(ideal_mod, ideal_golden) > tol`, or an exact state mismatch the probes missed → `LOGIC_BUG`. Noise: `noise_dev > budget` → `NOISE_REGRESSION`, with `budget = margin·(shot_floor + (hardware_part + 3σ)·cost_ratio)`. Otherwise `REFACTOR_OK` / `PASS`. |
@@ -226,18 +226,22 @@ be = QiskitBackendAdapter(platform_backend)      # noisy counts from it, exact i
 
 **IonQ-specific behaviour built in**
 
-* Ideal probabilities come from `job.get_probabilities()` (exact; `get_counts()` on the ideal simulator
-  would re-sample and add shot noise).
+* Verdict ideal probabilities come from local exact statevector simulation, just as they do for a
+  generic Qiskit backend. In qiskit-ionq 1.1.1, `job.get_probabilities()` loses outcomes absent from
+  its client-side one-shot sample, and the raw IonQ payload is rounded to three decimal places.
+  qdebug uses the raw payload only for a precision-aware remote consistency check, never for verdicts.
 * Noisy runs use `backend.set_options(noise_model=..., sampler_seed=...)` for reproducible noise.
 * Circuits are transpiled to `qiskit_ionq`'s accepted gate list at `optimization_level=0`.
-* `doctor`/`check` cross-check IonQ's ideal output against local exact simulation and **warn on
-  mismatch** (e.g. bit-ordering), so a wrong convention can't silently flip verdicts.
+* `check` cross-checks the raw IonQ ideal output against local exact simulation, allowing only the
+  maximum TVD explained by three-decimal rounding, and **warns on larger mismatches** (e.g.
+  bit-ordering). Remote values cannot silently flip verdicts.
 * `--native` sends the **noisy** runs in IonQ's native gates (`gpi`, `gpi2`, and `ms` or `zz` depending
   on the noise model), translated gate by gate, so the cloud compiler cannot cancel redundant gates
   before their noise is measured. Ideal runs stay on the default gateset. Use it together with
   `--calibrate`, which measures nothing on the default gateset if IonQ cancels the calibration pairs.
-* Default logic tolerance is `1e-4` on IonQ (probabilities travel over the API) vs `1e-9` locally;
-  override with `--logic-tol`.
+* Default logic tolerance is `1e-9` on both local and IonQ backends because verdict probabilities
+  are computed locally and exactly; override with `--logic-tol`. IonQ ideal verdicts are subject to
+  the local exact simulator limit of 24 qubits.
 
 ---
 
@@ -246,9 +250,11 @@ be = QiskitBackendAdapter(platform_backend)      # noisy counts from it, exact i
 * **Tested:** the suite passes locally (`pytest`), including 1,020 repeated checks of unchanged
   circuits (6 circuits x 170 noise seeds, `-m slow`) with zero false alarms, and the full IonQ code path against a **fake** `qiskit-ionq` provider that
   mimics its documented API (options, job shapes).
-* **Not yet exercised against live IonQ**: this was built without an IonQ API key. Run
-  `qdebug doctor --backend ionq` first; it is designed to expose bit-order or API surprises immediately.
-  `IONQ_API_KEY=... python -m pytest -m ionq -v` then checks the assumptions the fake provider encodes.
+* **Live IonQ finding:** `doctor` passes, but qiskit-ionq 1.1.1's formatted ideal results omit
+  outcomes not selected by its one-shot sampler. The raw API histogram preserves those outcomes but
+  rounds probabilities to three decimals. qdebug now uses local exact statevectors for verdicts and
+  checks the raw remote output for mapping/compilation anomalies. The focused live support test passes;
+  run `python -m pytest -m ionq -v` to validate all live checks in your environment.
 * **The pull-request workflow has not run on GitHub yet** (nothing has been pushed).
 * **The browser demo is a teaching aid, not the tool.** It re-implements the method in JavaScript for
   circuits of up to four qubits (seven gate types) with depolarizing noise. The page itself was
@@ -276,7 +282,9 @@ be = QiskitBackendAdapter(platform_backend)      # noisy counts from it, exact i
 
 ## 6. Ideas for the remaining hackathon hours
 
-See [ROADMAP.md](ROADMAP.md) for the plan and what is done. Still open:
+See [ROADMAP.md](ROADMAP.md) for the plan and what is done. Product work is locally complete.
+What is still open is **submission** (Qollab project page, 2–3 min public video, feature freeze
+Oct 11 15:00 ET) plus optional live IonQ numbers. Later technical ideas, not for this weekend:
 
 1. Stabilizer-based equivalence for wide Clifford circuits, beyond the 20-qubit exact limit.
 2. Measured noise blame: run each edit alone under the noise model instead of estimating from gate counts.
@@ -285,3 +293,5 @@ See [ROADMAP.md](ROADMAP.md) for the plan and what is done. Still open:
 ## License
 
 MIT, see [LICENSE](LICENSE).
+
+This effort is supported by Qollab & IonQ.

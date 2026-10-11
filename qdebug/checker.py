@@ -158,14 +158,20 @@ def check(name: str, qc, snap: Snapshot, backend: Backend,
     logic_dev = max(per_basis.values())
 
     if cfg.cross_check_local and backend.name.startswith("ionq") \
-            and mod.num_qubits <= MAX_LOCAL_QUBITS:
+            and mod.num_qubits <= MAX_LOCAL_QUBITS \
+            and hasattr(backend, "remote_ideal_probs"):
         local = [exact_probs(c) for c in probe_circs]
-        gap = max(tvd(a, b) for a, b in zip(local, ideal_mod))
-        if gap > 1e-3:
+        remote = backend.remote_ideal_probs(probe_circs)
+        gap = max(tvd(local_probs, remote_probs)
+                  for local_probs, remote_probs in zip(local, remote))
+        support = max(len(set(local_probs) | set(remote_probs))
+                      for local_probs, remote_probs in zip(local, remote))
+        rounding_bound = backend.remote_probability_resolution * support / 4
+        if gap > rounding_bound:
             warnings.append(
                 f"IonQ ideal simulator differs from local exact simulation by "
-                f"TVD={gap:.3g}: check bit ordering / compilation before trusting "
-                f"verdicts.")
+                f"TVD={gap:.3g}, above the {rounding_bound:.3g} bound from "
+                "three-decimal API rounding: check bit ordering / compilation.")
 
     # ---- 1b. exact comparison: catches what the probe bases cannot see ---
     method, state_dist, unitary_dist = "probes", None, None

@@ -163,6 +163,6 @@ def test_native_mode_requests_native_gateset_for_noisy_runs_only(monkeypatch):
     pcs = [with_probe(ghz4(), "Z")]
     be.ideal_probs(pcs)
     be.noisy_counts(pcs, 100, seed=1)
-    assert asked == ["qis", "native"]
+    assert asked == ["native"]
     snap = record("ghz4", ghz4(), be, shots=200, n_seeds=2)
     assert check("ghz4", ghz4(), snap, be, CheckConfig()).verdict is Verdict.PASS

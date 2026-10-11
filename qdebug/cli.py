@@ -182,7 +182,8 @@ def cmd_doctor(a) -> int:
     qc = QuantumCircuit(2, name="doctor_x0")
     qc.x(0)                                   # expect bitstring '01' (q1=0, q0=1)
     pc = probes(qc, ("Z",))
-    ideal = be.ideal_probs(pc)[0]
+    ideal_fn = getattr(be, "remote_ideal_probs", be.ideal_probs)
+    ideal = ideal_fn(pc)[0]
     _say(f"ideal   : {ideal}")
     counts = be.noisy_counts(pc, 500, 1)[0]
     _say(f"noisy   : {counts}")
